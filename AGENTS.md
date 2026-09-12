@@ -17,3 +17,16 @@ Folder layout:
 - docs/ — conception documents (v1 original → v2 → v3) and the active plan workbench_v0_plan.md
 - docs/reviews/ — external reviews of the conception
 - external/ — reference material that is not part of the project
+## Agent skills
+
+### Issue tracker
+
+Local markdown: issues and specs live as files under `.scratch/<feature-slug>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary, label string equals role name. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
