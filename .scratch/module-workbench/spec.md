@@ -5,6 +5,10 @@ file manipulation, and a module system where every module is a draggable tab
 that can live in any area (sidebar / center / right / bottom panel), plus a
 settings gear on every module.
 
+Status: sections 1 and 3 implemented (issues 01–04). Section 2 superseded by
+the recursive split-tree layout (issue 05): splittable panes instead of fixed
+areas — any tab can live in any pane, created by dragging to a pane edge.
+
 ## 1. File explorer (VSCode parity for v0)
 
 - File-type icons (tex, md, pdf, images, generic) and open/closed folder icons.
