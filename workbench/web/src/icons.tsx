@@ -124,6 +124,18 @@ export const ExpandIcon = (p: IconProps) => (
     <path d="m3 21 7-7" />
   </Svg>
 );
+export const SplitRightIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <line x1="13.5" y1="5" x2="13.5" y2="19" />
+  </Svg>
+);
+export const SplitDownIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3.5" y="5" width="17" height="14" rx="2" />
+    <line x1="3.5" y1="12" x2="20.5" y2="12" />
+  </Svg>
+);
 export const EyeIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
