@@ -67,7 +67,7 @@ export default function PdfViewer({ ctx }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [ctx.projectOpen, ctx.pdfVersion, zoom]);
+  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, zoom]);
 
   useEffect(
     () => () => {
