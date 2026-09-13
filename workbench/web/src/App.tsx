@@ -39,8 +39,8 @@ export default function App() {
   }, [layout, project]);
 
   /** Open (or focus) the default set of modules for a project. */
-  // Minimal template: explorer + editor only. PDF / Run Log / Install open on
-  // demand (activity bar) so the editor window is not pre-split.
+  // Default template: explorer in the sidebar, editor in the center pane; PDF,
+  // Run Log and Install open on demand into their home panes (bottom panel).
   const openDefaultTabs = useCallback((p: Project | null) => {
     dispatch({ type: "open", moduleId: "explorer" });
     if (p) dispatch({ type: "open", moduleId: "editor", params: { filePath: p.main_file } });
@@ -215,7 +215,7 @@ export default function App() {
   // --- module context -----------------------------------------------------
 
   const activeFile = useMemo(() => {
-    const id = layout.active.center;
+    const id = layout.lastEditor;
     if (!id) return null;
     const t = layout.tabs[id];
     if (t?.moduleId !== "editor") return null;
