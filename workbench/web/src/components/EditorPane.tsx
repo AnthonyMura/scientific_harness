@@ -35,9 +35,25 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const saveRef = useRef<() => void>(() => {});
+  const syncRef = useRef(ctx.syncToPdf);
+  syncRef.current = ctx.syncToPdf;
+  const gotoRef = useRef(ctx.editorGoto);
+  gotoRef.current = ctx.editorGoto;
+  const [viewTick, setViewTick] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
+
+  /** Select a whole line and center it in the viewport (inverse search). */
+  const applyGoto = (view: EditorView, lineNo: number) => {
+    const n = Math.max(1, Math.min(lineNo, view.state.doc.lines));
+    const l = view.state.doc.line(n);
+    view.dispatch({
+      selection: { anchor: l.from, head: l.to },
+      effects: EditorView.scrollIntoView(l.from, { y: "center" }),
+    });
+    view.focus();
+  };
 
   useEffect(() => {
     if (!filePath || !hostRef.current) return;
@@ -81,6 +97,17 @@ export default function EditorPane({ ctx, filePath }: Props) {
             ]),
             lang,
             ...(wrap ? [EditorView.lineWrapping] : []),
+            EditorView.domEventHandlers({
+              // Forward search (M3): a click jumps the PDF to this line.
+              click(event, view) {
+                if (!filePath || !filePath.endsWith(".tex")) return false;
+                const e = event as MouseEvent;
+                const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+                if (pos == null) return false;
+                syncRef.current(filePath, view.state.doc.lineAt(pos).number);
+                return false;
+              },
+            }),
             EditorState.tabSize.of(tabSize),
             EditorView.updateListener.of((u) => {
               if (u.docChanged) setDirty(true);
@@ -90,6 +117,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
       });
       viewRef.current = view;
       setError(null);
+      setViewTick((t) => t + 1);
+      // A reverse-sync jump may have arrived while this file was loading.
+      const g = gotoRef.current;
+      if (g && g.file === filePath) applyGoto(view, g.line);
     })().catch((e) => {
       if (!cancelled) setError(e instanceof Error ? e.message : String(e));
     });
@@ -103,6 +134,16 @@ export default function EditorPane({ ctx, filePath }: Props) {
     // projectRoot: switching projects must reload even for identical file names.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
+
+  // Inverse search (M3): PDF click → jump to the line. Re-runs on
+  // viewTick because the view is created asynchronously after a load.
+  useEffect(() => {
+    const g = ctx.editorGoto;
+    if (!g || !filePath || g.file !== filePath) return;
+    const view = viewRef.current;
+    if (view) applyGoto(view, g.line);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.editorGoto, filePath, viewTick]);
 
   const fs = typeof settings.fontSize === "number" ? settings.fontSize : 15;
   const lh = typeof settings.lineHeight === "number" ? settings.lineHeight : 1.7;
