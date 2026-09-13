@@ -5,7 +5,7 @@ import { api, initApi } from "./api";
 import type { ActiveJob, Project } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
-import type { AppCtx } from "./modules/ctx";
+import type { AppCtx, SyncRequest } from "./modules/ctx";
 import { layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
 
 function errMsg(e: unknown): string {
@@ -22,6 +22,8 @@ export default function App() {
   const [showOpen, setShowOpen] = useState(false);
   const [openPath, setOpenPath] = useState("");
   const [pdfVersion, setPdfVersion] = useState(0);
+  const [pdfSync, setPdfSync] = useState<SyncRequest | null>(null);
+  const [editorGoto, setEditorGoto] = useState<SyncRequest | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const offsetRef = useRef(0);
   const finishedRef = useRef<string | null>(null);
@@ -241,6 +243,19 @@ export default function App() {
     dispatch({ type: "retab", oldId, newId: "editor:" + newPath, title: newPath.split("/").pop() || newPath });
   }, []);
 
+  // --- SyncTeX channels (M3): editor click → PDF jump; PDF click → line.
+  const syncToPdf = useCallback((file: string, line: number) => {
+    setPdfSync((s) => ({ file, line, nonce: (s?.nonce ?? 0) + 1 }));
+  }, []);
+
+  const syncToEditor = useCallback(
+    (file: string, line: number) => {
+      onOpenFile(file);
+      setEditorGoto((s) => ({ file, line, nonce: (s?.nonce ?? 0) + 1 }));
+    },
+    [onOpenFile],
+  );
+
   const ctx: AppCtx = useMemo(
     () => ({
       projectOpen: !!project,
@@ -253,8 +268,13 @@ export default function App() {
       onStartInstall: (t, d) => void startInstall(t, d),
       onPathsGone,
       onFileRenamed,
+      pdfSync,
+      editorGoto,
+      syncToPdf,
+      syncToEditor,
     }),
-    [project, activeFile, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed],
+    [project, activeFile, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
+     pdfSync, editorGoto, syncToPdf, syncToEditor],
   );
 
   return (
