@@ -34,6 +34,10 @@ Three parts: an Electron shell, a React UI inside it, and a Python backend sidec
 - The backend runs where the project files live. Default deployment: bundled sidecar on the host OS. On your machine there is an alternative: run the sidecar inside WSL (files and TeX both native there) and let the Windows UI attach over localhost. Same code, different launch; decided at M0 based on the file-write check (section 8, risk 1).
 - The Python backend is a deliberate choice: you know Python and can read every line of it. The sidecar pattern (local frontend + Python service) is the same shape as JupyterLab.
 
+### Development mode (browser-first)
+
+Development happens in the browser as the primary surface; the Electron shell is developed later. `npm run dev` in `workbench/app` starts only the Vite dev server and a shared sidecar bound to `127.0.0.1:8765` with token `devtoken`; the UI at http://127.0.0.1:5199 talks to it cross-origin (CORS is enabled on the sidecar, the token still gates every request). Opening a project in the browser uses an inline path modal plus the recent-projects list; the OS-native folder dialog exists only inside the Electron shell (`npm run dev:full`), which attaches to the same shared sidecar via `WORKBENCH_BACKEND_URL`, so both surfaces see one backend.
+
 ## 3. Backend (Python)
 
 FastAPI + uvicorn, bound to 127.0.0.1 on an OS-assigned port; a random token travels in the request header. Electron spawns it at startup (`python -m workbench_backend serve`), reads the actual port from its first stdout line, and kills it on exit.
