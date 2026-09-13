@@ -92,7 +92,7 @@ export default function FileExplorer({ ctx }: Props) {
     );
   }
 
-  // Reset when a project is (re)opened.
+  // Reset + reload when a project is (re)opened or switched to another root.
   useEffect(() => {
     if (!ctx.projectOpen) return;
     setByDir({});
@@ -101,7 +101,7 @@ export default function FileExplorer({ ctx }: Props) {
     setError(null);
     void load("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx.projectOpen]);
+  }, [ctx.projectOpen, ctx.projectRoot]);
 
   // Toggling hidden files re-lists everything cached.
   useEffect(() => {
