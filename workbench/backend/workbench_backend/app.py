@@ -8,6 +8,7 @@ on exit (plan section 3).
 
 from __future__ import annotations
 
+import gzip
 import os
 import secrets
 import socket
@@ -17,7 +18,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 
 from . import __version__, compile_service, files, install, projects, state
 from .errors import ApiError
@@ -154,6 +155,17 @@ def create_app(token: str) -> FastAPI:
         if not p.is_file():
             raise ApiError(404, f"no such artifact: {name}")
         return FileResponse(str(p), media_type="application/pdf", filename=name)
+
+    @app.get("/api/artifacts/synctex")
+    def artifact_synctex(file: str = "main.synctex.gz"):
+        """Gunzipped SyncTeX map for forward/inverse search (M3)."""
+        root = projects.root_of(st)
+        name = os.path.basename(file)  # no traversal
+        p = state.build_dir(root) / name
+        if not p.is_file():
+            raise ApiError(404, f"no such artifact: {name}")
+        raw = gzip.open(p, "rb").read()
+        return PlainTextResponse(raw.decode("utf-8", errors="replace"))
 
     # --- config ----------------------------------------------------------------
     @app.get("/api/config")
