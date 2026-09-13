@@ -39,16 +39,12 @@ export default function App() {
   }, [layout, project]);
 
   /** Open (or focus) the default set of modules for a project. */
+  // Minimal template: explorer + editor only. PDF / Run Log / Install open on
+  // demand (activity bar) so the editor window is not pre-split.
   const openDefaultTabs = useCallback((p: Project | null) => {
     dispatch({ type: "open", moduleId: "explorer" });
-    if (p) {
-      dispatch({ type: "open", moduleId: "editor", params: { filePath: p.main_file } });
-      dispatch({ type: "open", moduleId: "pdf" });
-      dispatch({ type: "open", moduleId: "log" });
-    } else {
-      dispatch({ type: "open", moduleId: "editor" });
-      dispatch({ type: "open", moduleId: "log" });
-    }
+    if (p) dispatch({ type: "open", moduleId: "editor", params: { filePath: p.main_file } });
+    else dispatch({ type: "open", moduleId: "editor" });
   }, []);
 
   const bootLayout = useCallback(
@@ -182,6 +178,7 @@ export default function App() {
     offsetRef.current = 0;
     finishedRef.current = null;
     activeJobIdRef.current = id;
+    dispatch({ type: "open", moduleId: "log" }); // show the run log while a job runs
     setJob({ id, kind, label, status: "running", exit_code: null, logLines: [], errors: [], artifacts: {} });
   };
 
