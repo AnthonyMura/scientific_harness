@@ -102,6 +102,16 @@ export const api = {
     return res.blob();
   },
 
+  /** Gunzipped SyncTeX map, or null when the artifact does not exist yet. */
+  async fetchSynctex(file = "main.synctex.gz"): Promise<string | null> {
+    const c = apiConfig();
+    const res = await fetch(`${c.baseUrl}/api/artifacts/synctex?file=${encodeURIComponent(file)}`, {
+      headers: { "X-Workbench-Token": c.token },
+    });
+    if (!res.ok) return null; // no synctex artifact yet — sync stays disabled
+    return res.text();
+  },
+
   getConfig: () => request<ConfigResponse>("GET", "/api/config"),
   setConfig: (body: Partial<ConfigResponse>) =>
     request<{ ok: boolean }>("PUT", "/api/config", body),
