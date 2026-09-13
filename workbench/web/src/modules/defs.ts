@@ -1,51 +1,26 @@
 // Module metadata without React: shared by the layout reducer and the UI.
-import type { AreaId } from "./layout";
+export type Slot = "sidebar" | "editor" | "panel";
 
 export interface ModuleDef {
   id: string;
   title: string;
-  defaultArea: AreaId;
-  singleton: boolean;
+  /** Where a freshly opened module lands if the user has not placed it yet. */
+  slot: Slot;
   /** Tab id for a given param set (editor tabs are keyed by file path). */
   tabId: (params?: Record<string, unknown>) => string;
 }
 
 export const MODULE_DEFS: Record<string, ModuleDef> = {
-  explorer: {
-    id: "explorer",
-    title: "Explorer",
-    defaultArea: "sidebar",
-    singleton: true,
-    tabId: () => "explorer",
-  },
+  explorer: { id: "explorer", title: "Explorer", slot: "sidebar", tabId: () => "explorer" },
   editor: {
     id: "editor",
     title: "Editor",
-    defaultArea: "center",
-    singleton: false,
+    slot: "editor",
     tabId: (p) => (p?.filePath ? `editor:${String(p.filePath)}` : "editor"),
   },
-  pdf: {
-    id: "pdf",
-    title: "PDF Preview",
-    defaultArea: "right",
-    singleton: true,
-    tabId: () => "pdf",
-  },
-  log: {
-    id: "log",
-    title: "Run Log",
-    defaultArea: "panel",
-    singleton: true,
-    tabId: () => "log",
-  },
-  install: {
-    id: "install",
-    title: "Install TeX",
-    defaultArea: "right",
-    singleton: true,
-    tabId: () => "install",
-  },
+  pdf: { id: "pdf", title: "PDF Preview", slot: "panel", tabId: () => "pdf" },
+  log: { id: "log", title: "Run Log", slot: "panel", tabId: () => "log" },
+  install: { id: "install", title: "Install TeX", slot: "panel", tabId: () => "install" },
 };
 
 /** Activity bar order. */
