@@ -5,7 +5,7 @@ import React, { useEffect, useState } from "react";
 import type { AppCtx } from "../modules/ctx";
 import { MODULE_DEFS, MODULE_ORDER } from "../modules/defs";
 import { MODULES } from "../modules/registry";
-import { AREA_LABELS, AREAS } from "../modules/layout";
+import { AREA_LABELS, AREAS, FILE_DRAG_MIME } from "../modules/layout";
 import type { AreaId, LayoutAction, LayoutState } from "../modules/layout";
 import ContextMenu from "./ContextMenu";
 import type { MenuItem } from "./ContextMenu";
@@ -31,7 +31,7 @@ interface Dnd {
 
 const EMPTY_HINT: Record<AreaId, string> = {
   sidebar: "No modules here.\nDrag a tab from another area.",
-  center: "No editor open.\nClick a file in the Explorer or use the activity bar.",
+  center: "No editor open.\nDouble-click a file in the Explorer, or drag one here.",
   right: "Drop a module here.",
   panel: "No modules in the bottom panel.",
 };
@@ -83,19 +83,28 @@ export default function Workbench({
       setDrag({ tabId, fromArea: area });
     },
     onTabDragOver: (e, area, index) => {
-      if (!drag) return;
+      const isFile = e.dataTransfer.types.includes(FILE_DRAG_MIME);
+      if (!drag && !isFile) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+      e.dataTransfer.dropEffect = isFile ? "copy" : "move";
       setOver((o) => (o && o.area === area && o.index === index ? o : { area, index }));
     },
     onAreaDragOver: (e, area) => {
-      if (!drag) return;
+      const isFile = e.dataTransfer.types.includes(FILE_DRAG_MIME);
+      if (!drag && !isFile) return;
       e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
+      e.dataTransfer.dropEffect = isFile ? "copy" : "move";
       setOver((o) => (o && o.area === area && o.index === undefined ? o : { area }));
     },
     onDrop: (e, area, index) => {
       e.preventDefault();
+      const file = e.dataTransfer.getData(FILE_DRAG_MIME);
+      if (file) {
+        if (ctx.projectOpen) ctx.onOpenFile(file); // drop a project file -> open in editor
+        setDrag(null);
+        setOver(null);
+        return;
+      }
       if (drag) dispatch({ type: "move", tabId: drag.tabId, toArea: area, index });
       setDrag(null);
       setOver(null);
@@ -161,7 +170,7 @@ export default function Workbench({
           )}
           <div className="wb-center-col">
             {areaEl("center")}
-            {!layout.collapsed.panel && (
+            {!layout.collapsed.panel && layout.areas.panel.length > 0 && (
               <>
                 <div
                   className="resizer h"
