@@ -11,6 +11,9 @@ export const AREA_LABELS: Record<AreaId, string> = {
   panel: "Bottom Panel",
 };
 
+/** dataTransfer type for dragging a project file from the explorer into the workbench. */
+export const FILE_DRAG_MIME = "application/x-workbench-file";
+
 export interface Tab {
   id: string;
   moduleId: string;
@@ -64,7 +67,7 @@ export function defaultLayout(): LayoutState {
   return {
     ...emptyTabs(),
     widths: { ...DEFAULT_WIDTHS },
-    collapsed: { sidebar: false, right: true, panel: false },
+    collapsed: { sidebar: false, right: true, panel: true },
     fullscreen: null,
   };
 }
@@ -189,7 +192,7 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
 
 // --- persistence -----------------------------------------------------------
 
-const KEY = "workbench.layout.v1";
+const KEY = "workbench.layout.v2";
 
 export function persistLayout(state: LayoutState, root: string | null): void {
   try {
@@ -235,7 +238,7 @@ export function loadPersistedLayout(): { state: LayoutState; root: string | null
       const v = p.widths?.[k];
       if (typeof v === "number") widths[k] = clampWidth(k, v);
     }
-    const collapsed = { sidebar: false, right: true, panel: false };
+    const collapsed = { sidebar: false, right: true, panel: true };
     for (const k of ["sidebar", "right", "panel"] as const) {
       if (typeof p.collapsed?.[k] === "boolean") collapsed[k] = p.collapsed[k];
     }
