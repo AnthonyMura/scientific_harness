@@ -12,3 +12,6 @@ app/workbench-shell.log
 
 # per-project state and build output (created by the sidecar)
 .workbench/
+
+# in-app TinyTeX (hidden TeX Live used only by the app)
+.texlive/
