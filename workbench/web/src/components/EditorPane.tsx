@@ -100,8 +100,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
       setDirty(false);
     };
     // tabSize/wrap recreate the view; fontSize/lineHeight are live CSS vars.
+    // projectRoot: switching projects must reload even for identical file names.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, settings.tabSize, settings.wrap]);
+  }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
 
   const fs = typeof settings.fontSize === "number" ? settings.fontSize : 15;
   const lh = typeof settings.lineHeight === "number" ? settings.lineHeight : 1.7;
