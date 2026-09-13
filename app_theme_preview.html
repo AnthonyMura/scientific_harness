@@ -1,0 +1,367 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vesper — Single Theme Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ── Vesper tokens (spec: app_theme.md) ───────────────────── */
+    --pearl:#F2F1ED; --taupe:#BCB1A0; --sand:#B38F6F; --brown:#8D7564;
+    --brick:#7B1612; --crimson:#710014; --burgundy:#6C140E; --maroon:#51100C; --ink:#161616;
+    --bg-base:#191412; --bg-pane:#201A17; --bg-raised:#251E1A; --bg-hover:#29221E; --bg-active:#2E2621;
+    --hairline:rgba(179,143,111,.14); --hairline-strong:rgba(179,143,111,.35);
+    --ok:var(--sand); --warn:#944C3C; --err:#B17975; --err-tint:rgba(123,22,18,.35);
+    --gold-bright:#C3A893;
+    --font-display:"Cormorant Garamond",Palatino,"Palatino Linotype",Georgia,serif;
+    --font-ui:"Inter","Segoe UI",system-ui,sans-serif;
+    --font-editor:"Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+    --font-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+
+    /* ── room chrome (interpolated by the slider; app never changes) */
+    --room:#0A0908; --room-text:#F2F1ED;
+    --frame-shadow:0 30px 90px rgba(10,8,6,.55);
+    --frame-rim:0 0 0 1px rgba(179,143,111,.10);
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html { -webkit-font-smoothing:antialiased; }
+  body {
+    background:var(--room); color:var(--room-text);
+    font-family:var(--font-ui); font-size:14px;
+    padding:56px 28px 96px; transition:background .25s ease, color .25s ease;
+  }
+  .wrap { max-width:1180px; margin:0 auto; }
+
+  /* ── page header ─────────────────────────────────────────────── */
+  header { text-align:center; margin-bottom:34px; }
+  h1 { font-family:var(--font-display); font-weight:600; font-size:34px; letter-spacing:.32em; text-transform:uppercase; }
+  .sub { margin-top:8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; opacity:.55; }
+
+  /* ── ambient slider ──────────────────────────────────────────── */
+  .ambient { display:flex; align-items:center; justify-content:center; gap:14px; margin:26px auto 40px; max-width:560px; }
+  .ambient .end { font-size:10px; letter-spacing:.16em; text-transform:uppercase; opacity:.6; white-space:nowrap; }
+  .ambient input[type=range] { flex:1; -webkit-appearance:none; appearance:none; height:2px; background:linear-gradient(90deg, #CFC9BE, #B38F6F 55%, #161616); outline:none; }
+  .ambient input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; background:#B38F6F; border:2px solid #191412; box-shadow:0 0 0 1px rgba(179,143,111,.6); cursor:pointer; }
+  .ambient input[type=range]::-moz-range-thumb { width:14px; height:14px; border-radius:50%; background:#B38F6F; border:2px solid #191412; box-shadow:0 0 0 1px rgba(179,143,111,.6); cursor:pointer; }
+  .ambient-note { text-align:center; font-size:11px; letter-spacing:.08em; opacity:.5; margin-top:-28px; margin-bottom:38px; }
+
+  /* ── app frame ───────────────────────────────────────────────── */
+  .frame {
+    background:var(--bg-base); color:var(--pearl);
+    border-radius:4px; overflow:hidden;
+    box-shadow:var(--frame-shadow), var(--frame-rim);
+    height:640px; display:flex; flex-direction:column;
+  }
+  .titlebar { height:30px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 14px; background:var(--bg-pane); border-bottom:1px solid var(--hairline); }
+  .wordmark { font-family:var(--font-display); font-weight:600; font-size:12px; letter-spacing:.3em; text-transform:uppercase; color:var(--pearl); }
+  .tb-right { font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--brown); }
+
+  .projectbar { height:52px; flex:none; display:flex; align-items:center; gap:12px; padding:0 16px; background:var(--bg-pane); border-bottom:1px solid rgba(179,143,111,.4); }
+  .proj-name { font-size:13px; font-weight:500; color:var(--pearl); display:flex; align-items:center; gap:8px; margin-right:6px; }
+  .proj-name .dot { width:6px; height:6px; border-radius:50%; background:var(--sand); }
+  .select { font-size:12px; color:var(--taupe); background:var(--bg-raised); border:1px solid var(--hairline-strong); border-radius:2px; padding:6px 10px; display:flex; align-items:center; gap:8px; cursor:pointer; }
+  .select i { font-style:normal; color:var(--brown); font-size:9px; }
+  .spacer { flex:1; }
+  .btn { font-family:var(--font-ui); font-size:11px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; border-radius:2px; padding:8px 16px; cursor:pointer; border:1px solid transparent; transition:background .12s ease, color .12s ease, border-color .12s ease; }
+  .btn.primary { background:var(--brick); color:var(--pearl); }
+  .btn.primary:hover { background:var(--crimson); }
+  .btn.ghost { background:transparent; color:var(--taupe); border-color:rgba(179,143,111,.25); }
+  .btn.ghost:hover { background:var(--bg-hover); color:var(--pearl); }
+
+  /* ── main row ────────────────────────────────────────────────── */
+  .mainrow { flex:1; display:flex; min-height:0; }
+  .pane-label { font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--brown); padding:12px 14px 8px; }
+
+  .explorer { width:218px; flex:none; background:var(--bg-pane); border-right:1px solid var(--hairline); overflow:hidden; }
+  .tree { list-style:none; font-size:12.5px; }
+  .tree li { display:flex; align-items:center; gap:8px; height:24px; padding:0 14px 0 12px; color:var(--taupe); cursor:pointer; border-left:2px solid transparent; }
+  .tree li:hover { background:var(--bg-hover); color:var(--pearl); }
+  .tree li.active { background:var(--bg-active); color:var(--pearl); border-left-color:var(--sand); }
+  .tree .chev { font-size:8px; color:var(--brown); width:10px; }
+  .tree .ico { width:14px; height:14px; flex:none; opacity:.75; }
+  .tree li.active .ico { opacity:1; }
+
+  .editor { flex:1; min-width:0; background:var(--bg-base); display:flex; flex-direction:column; }
+  .code { padding:14px 0; font-family:var(--font-editor); font-size:14px; line-height:1.75; color:rgba(242,241,237,.88); overflow:hidden; }
+  .cl { display:flex; white-space:pre; }
+  .cl .ln { width:46px; flex:none; text-align:right; padding-right:14px; font-family:var(--font-mono); font-size:10.5px; line-height:2.35; color:var(--brown); user-select:none; }
+  .cl.errline { background:var(--err-tint); box-shadow:inset 2px 0 0 var(--brick); }
+  .cmd { color:#B38F6F; }
+  .cmdsec { color:#C3A893; font-weight:600; }
+  .brace, .arg { color:#BCB1A0; }
+  .comment { color:#8D7564; font-style:italic; }
+  .math { color:rgba(242,241,237,.75); }
+  .sel { background:rgba(179,143,111,.28); }
+  .caret { display:inline-block; width:1.5px; height:1em; background:var(--pearl); vertical-align:-0.12em; animation:blink 1.1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+  @media (prefers-reduced-motion: reduce) { .caret { animation:none; } }
+
+  .pdfpane { width:296px; flex:none; background:var(--bg-pane); border-left:1px solid var(--hairline); display:flex; flex-direction:column; overflow:hidden; }
+  .pdf-chrome { flex:1; padding:18px 20px; overflow:auto; }
+  .page {
+    background:var(--pearl); color:#3A342E; border-radius:1px;
+    box-shadow:0 2px 12px rgba(81,16,12,.35), 0 0 0 1px var(--hairline-strong);
+    padding:34px 26px 40px; text-align:center; font-family:var(--font-editor);
+  }
+  .page h3 { font-size:17px; font-weight:600; line-height:1.45; letter-spacing:.01em; }
+  .page .auth { margin-top:12px; font-size:11.5px; color:#6B6459; }
+  .page .affil { margin-top:4px; font-size:10.5px; color:#8D857A; }
+  .page hr { border:none; border-top:1px solid rgba(141,117,100,.4); width:38%; margin:22px auto; }
+  .page .bodylines { text-align:left; font-size:10.5px; line-height:1.9; color:#6B6459; }
+  .page .bodylines div:last-child { width:72%; }
+
+  /* ── log panel ───────────────────────────────────────────────── */
+  .logpanel { height:138px; flex:none; background:var(--bg-pane); border-top:1px solid var(--hairline); display:flex; flex-direction:column; overflow:hidden; }
+  .log-head { display:flex; align-items:center; gap:14px; padding:9px 16px 7px; }
+  .log-head .lbl { font-size:10px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:var(--brown); }
+  .status { font-size:10.5px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+  .status.ok { color:var(--ok); }
+  .status.err { color:var(--err); }
+  .log-head .meta { font-size:11px; color:var(--taupe); opacity:.75; }
+  .log-body { flex:1; overflow:hidden; padding:0 16px 8px; font-family:var(--font-mono); font-size:11.5px; line-height:1.85; }
+  .log-line { color:var(--taupe); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .log-line .tag { color:var(--brown); margin-right:8px; }
+  .log-line.okline { color:var(--ok); }
+  .log-line.warnline { color:var(--warn); }
+  .log-line.errline { color:var(--err); background:var(--err-tint); box-shadow:inset 2px 0 0 var(--brick); padding-left:8px; margin-left:-8px; cursor:pointer; }
+  .log-line.errline:hover { text-decoration:underline; text-decoration-color:var(--sand); }
+
+  /* ── token sheet ─────────────────────────────────────────────── */
+  section.sheet { margin-top:64px; }
+  .sheet h2 { font-family:var(--font-display); font-weight:600; font-size:19px; letter-spacing:.22em; text-transform:uppercase; margin-bottom:6px; }
+  .sheet .cap { font-size:11.5px; opacity:.55; margin-bottom:20px; letter-spacing:.04em; }
+  .group-label { font-size:10px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; opacity:.5; margin:18px 0 10px; }
+  .swatches { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px; }
+  .swatch { border-radius:3px; overflow:hidden; box-shadow:var(--frame-rim); }
+  .swatch .chip { height:54px; }
+  .swatch .meta { background:var(--bg-raised); padding:8px 10px; }
+  .swatch .name { font-size:11.5px; color:var(--pearl); }
+  .swatch .hex { font-family:var(--font-mono); font-size:10.5px; color:var(--sand); margin-top:2px; }
+  .swatch .role { font-size:10px; color:var(--taupe); margin-top:4px; line-height:1.5; }
+
+  /* ── components strip ────────────────────────────────────────── */
+  .components { display:flex; flex-wrap:wrap; gap:28px 36px; align-items:center; background:var(--bg-pane); border-radius:3px; padding:26px 28px; box-shadow:var(--frame-rim); }
+  .comp-cell { display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+  .comp-cell .lbl { font-size:9.5px; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--brown); }
+  .row { display:flex; gap:10px; align-items:center; }
+  .input-demo { background:var(--bg-raised); border:1px solid var(--hairline-strong); border-radius:2px; padding:8px 12px; font-size:12.5px; color:var(--pearl); width:190px; outline:1px solid rgba(179,143,111,.6); outline-offset:1px; }
+  .input-demo .ph { color:var(--brown); }
+  .toggle { width:34px; height:18px; border-radius:9px; position:relative; flex:none; }
+  .toggle .knob { position:absolute; top:2px; width:14px; height:14px; border-radius:50%; background:var(--pearl); transition:left .12s ease; }
+  .toggle.off { background:rgba(179,143,111,.3); }
+  .toggle.off .knob { left:2px; }
+  .toggle.on { background:var(--brick); }
+  .toggle.on .knob { left:18px; }
+  .tabs-demo { display:flex; gap:4px; }
+  .tab { font-size:12px; padding:7px 14px; color:var(--taupe); border-bottom:2px solid transparent; cursor:pointer; }
+  .tab.active { color:var(--pearl); border-bottom-color:var(--sand); }
+  .chip-status { font-size:10px; font-weight:600; letter-spacing:.14em; text-transform:uppercase; padding:5px 12px; border-radius:2px; border:1px solid var(--hairline-strong); }
+  .chip-status.ok { color:var(--ok); }
+  .chip-status.warn { color:var(--warn); }
+  .chip-status.err { color:var(--err); background:var(--err-tint); border-color:transparent; box-shadow:inset 2px 0 0 var(--brick); }
+  .tree-demo li { list-style:none; display:flex; align-items:center; gap:8px; height:24px; padding:0 12px; font-size:12.5px; color:var(--taupe); border-left:2px solid transparent; }
+  .tree-demo .hover { background:var(--bg-hover); color:var(--pearl); }
+  .tree-demo .active { background:var(--bg-active); color:var(--pearl); border-left-color:var(--sand); }
+
+  footer { margin-top:56px; text-align:center; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; opacity:.4; line-height:2; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Vesper</h1>
+    <div class="sub">One theme · every light — Scientific Harness, Workbench v0</div>
+  </header>
+
+  <div class="ambient">
+    <span class="end">Bright room</span>
+    <input type="range" id="ambient" min="0" max="100" value="50" aria-label="Ambient light">
+    <span class="end">Dark room</span>
+  </div>
+  <div class="ambient-note">The theme never changes. Only the room does.</div>
+
+  <!-- ═══════════════ APP FRAME (Workbench v0) ═══════════════ -->
+  <div class="frame">
+
+    <div class="titlebar">
+      <span class="wordmark">Scientific Harness</span>
+      <span class="tb-right">v0.1 · dusk build</span>
+    </div>
+
+    <div class="projectbar">
+      <span class="proj-name"><span class="dot"></span>Quantum Field Notes</span>
+      <span class="select">main.tex <i>▾</i></span>
+      <span class="select">wsl · Ubuntu <i>▾</i></span>
+      <span class="spacer"></span>
+      <button class="btn ghost">Cancel</button>
+      <button class="btn primary">Compile</button>
+    </div>
+
+    <div class="mainrow">
+
+      <aside class="explorer">
+        <div class="pane-label">Explorer</div>
+        <ul class="tree">
+          <li><span class="chev">▾</span><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M1.5 3h4l1.5 2h7.5v8h-13z" stroke="#8D7564"/></svg>figures</li>
+          <li style="padding-left:26px"><svg class="ico" viewBox="0 0 16 16" fill="none"><rect x="2" y="2.5" width="12" height="11" rx="1" stroke="#8D7564"/><circle cx="5.5" cy="6" r="1.3" stroke="#8D7564"/><path d="M2 11l3.5-3 3 2.5L11 8l3 3.5" stroke="#8D7564"/></svg>fig1.png</li>
+          <li class="active"><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4z" stroke="#F2F1ED"/><path d="M9.5 1.5V5H13" stroke="#F2F1ED"/></svg>main.tex</li>
+          <li><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4z" stroke="#8D7564"/><path d="M9.5 1.5V5H13" stroke="#8D7564"/></svg>references.bib</li>
+          <li><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4z" stroke="#8D7564"/><path d="M9.5 1.5V5H13" stroke="#8D7564"/></svg>notes.md</li>
+          <li><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4z" stroke="#8D7564"/><path d="M9.5 1.5V5H13" stroke="#8D7564"/></svg>appendix.tex</li>
+          <li><svg class="ico" viewBox="0 0 16 16" fill="none"><path d="M4 1.5h5.5L13 5v9.5H4z" stroke="#8D7564"/><path d="M9.5 1.5V5H13" stroke="#8D7564"/></svg>README.md</li>
+        </ul>
+      </aside>
+
+      <section class="editor">
+        <div class="pane-label">main.tex — LaTeX</div>
+        <div class="code">
+          <div class="cl"><span class="ln">1</span><span><span class="cmdsec">\documentclass</span><span class="brace">[</span><span class="arg">12pt,a4paper</span><span class="brace">]</span><span class="brace">{</span>article<span class="brace">}</span></span></div>
+          <div class="cl"><span class="ln">2</span>&nbsp;</div>
+          <div class="cl"><span class="ln">3</span><span><span class="cmd">\usepackage</span><span class="brace">{</span><span class="arg">T1</span><span class="brace">}</span><span class="brace">{</span>fontenc<span class="brace">}</span></span></div>
+          <div class="cl"><span class="ln">4</span><span><span class="cmd">\usepackage</span><span class="brace">{</span><span class="arg">utf8</span><span class="brace">}</span><span class="brace">{</span>inputenc<span class="brace">}</span></span></div>
+          <div class="cl"><span class="ln">5</span><span><span class="cmd">\usepackage</span><span class="brace">{</span>newpxtext,newpxmath<span class="brace">}</span>  <span class="comment">% Palatino-like serif, classic book typography</span></span></div>
+          <div class="cl"><span class="ln">6</span><span><span class="cmd">\usepackage</span><span class="brace">{</span>microtype<span class="brace">}</span>         <span class="comment">% refined spacing and protrusion</span></span></div>
+          <div class="cl"><span class="ln">7</span>&nbsp;</div>
+          <div class="cl"><span class="ln">8</span><span><span class="cmdsec">\begin</span><span class="brace">{</span>document<span class="brace">}</span></span></div>
+          <div class="cl"><span class="ln">9</span>&nbsp;</div>
+          <div class="cl"><span class="ln">10</span><span><span class="cmdsec">\section</span><span class="brace">{</span>Introduction<span class="brace">}</span></span></div>
+          <div class="cl"><span class="ln">11</span>&nbsp;</div>
+          <div class="cl"><span class="ln">12</span><span>We study the <span class="sel">persistence of coherence</span> in media whose</span></div>
+          <div class="cl"><span class="ln">13</span><span>scattering centers are sparsely distributed, where the</span></div>
+          <div class="cl"><span class="ln">14</span><span>local density <span class="math">$ \rho(x) $</span> varies over many length scales.</span></div>
+          <div class="cl"><span class="ln">15</span>&nbsp;</div>
+          <div class="cl"><span class="ln">16</span><span>The central question is how long a prepared state<span class="caret"></span></span></div>
+        </div>
+      </section>
+
+      <aside class="pdfpane">
+        <div class="pane-label">main.pdf · 1 / 12</div>
+        <div class="pdf-chrome">
+          <div class="page">
+            <h3>Quantum Coherence in<br>Sparse Media</h3>
+            <div class="auth">A. Researcher, B. Colleague</div>
+            <div class="affil">Department of Physics · University</div>
+            <hr>
+            <div class="bodylines">
+              <div>We study the persistence of coherence in media whose scattering centers are sparsely distributed.</div>
+              <div>The local density varies over many length scales, and the decay of the prepared state is governed by a hierarchy of correlation times.</div>
+              <div>Our main result bounds the decoherence rate in terms of the second moment of the disorder distribution.</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+
+    <div class="logpanel">
+      <div class="log-head">
+        <span class="lbl">Compile</span>
+        <span class="status ok">Success</span>
+        <span class="meta">4.2 s · target wsl (Ubuntu)</span>
+      </div>
+      <div class="log-body">
+        <div class="log-line"><span class="tag">info</span>This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023)</div>
+        <div class="log-line"><span class="tag">info</span>restricted \write18 enabled. entering extended mode</div>
+        <div class="log-line okline"><span class="tag">ok</span>main.pdf — 12 pages · 184 KB</div>
+        <div class="log-line warnline"><span class="tag">warn</span>Underfull \hbox (badness 3121) in paragraph at lines 12–14</div>
+      </div>
+    </div>
+
+  </div>
+  <!-- ═══════════════ /APP FRAME ═══════════════ -->
+
+  <section class="sheet">
+    <h2>Palette &amp; Surfaces</h2>
+    <div class="cap">Nine anchors from app_palette.md, each with one job. Surfaces are derived — ink lifted toward brown, warmed by maroon.</div>
+
+    <div class="group-label">Anchors</div>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#F2F1ED"></div><div class="meta"><div class="name">Soft Pearl</div><div class="hex">#F2F1ED</div><div class="role">Primary text · PDF page</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#BCB1A0"></div><div class="meta"><div class="name">Warm Taupe</div><div class="hex">#BCB1A0</div><div class="role">Secondary text · muted icons</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#B38F6F"></div><div class="meta"><div class="name">Warm Sand</div><div class="hex">#B38F6F</div><div class="role">Gold detail · focus · success</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#8D7564"></div><div class="meta"><div class="name">Muted Brown</div><div class="hex">#8D7564</div><div class="role">Hints · line numbers · comments</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#7B1612"></div><div class="meta"><div class="name">Deep Brick Red</div><div class="hex">#7B1612</div><div class="role">Primary action (Compile)</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#710014"></div><div class="meta"><div class="name">Crimson Depth</div><div class="hex">#710014</div><div class="role">Hover of brick · deep tint</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#6C140E"></div><div class="meta"><div class="name">Moody Burgundy</div><div class="hex">#6C140E</div><div class="role">Secondary fills · error tints</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#51100C"></div><div class="meta"><div class="name">Very Dark Maroon</div><div class="hex">#51100C</div><div class="role">Pressed · warm shadows</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#161616"></div><div class="meta"><div class="name">Ink</div><div class="hex">#161616</div><div class="role">Darkest anchor · scrim base</div></div></div>
+    </div>
+
+    <div class="group-label">Surfaces (derived)</div>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#191412"></div><div class="meta"><div class="name">bg-base</div><div class="hex">#191412</div><div class="role">App background · editor</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#201A17"></div><div class="meta"><div class="name">bg-pane</div><div class="hex">#201A17</div><div class="role">Explorer · log · PDF chrome</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#251E1A"></div><div class="meta"><div class="name">bg-raised</div><div class="hex">#251E1A</div><div class="role">Cards · popovers · inputs</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#29221E"></div><div class="meta"><div class="name">bg-hover</div><div class="hex">#29221E</div><div class="role">Row hover · ghost hover</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#2E2621"></div><div class="meta"><div class="name">bg-active</div><div class="hex">#2E2621</div><div class="role">Selected row · active tab</div></div></div>
+    </div>
+
+    <div class="group-label">Status &amp; detail (derived)</div>
+    <div class="swatches">
+      <div class="swatch"><div class="chip" style="background:#C3A893"></div><div class="meta"><div class="name">gold-bright</div><div class="hex">#C3A893</div><div class="role">Display moments · section cmds</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#944C3C"></div><div class="meta"><div class="name">warn (rust)</div><div class="hex">#944C3C</div><div class="role">Non-fatal log lines</div></div></div>
+      <div class="swatch"><div class="chip" style="background:#B17975"></div><div class="meta"><div class="name">err (rose)</div><div class="hex">#B17975</div><div class="role">Error text on brick tint</div></div></div>
+    </div>
+  </section>
+
+  <section class="sheet">
+    <h2>Components</h2>
+    <div class="cap">One look each — no light/dark variants exist to get wrong.</div>
+    <div class="components">
+      <div class="comp-cell"><span class="lbl">Buttons</span>
+        <div class="row"><button class="btn primary">Compile</button><button class="btn ghost">Cancel</button></div>
+      </div>
+      <div class="comp-cell"><span class="lbl">Input · focused</span>
+        <div class="input-demo"><span class="ph">Project name…</span></div>
+      </div>
+      <div class="comp-cell"><span class="lbl">Toggle · auto-compile</span>
+        <div class="row"><span class="toggle on"><span class="knob"></span></span><span class="toggle off"><span class="knob"></span></span></div>
+      </div>
+      <div class="comp-cell"><span class="lbl">Tabs</span>
+        <div class="tabs-demo"><span class="tab active">Editor</span><span class="tab">Preview</span></div>
+      </div>
+      <div class="comp-cell"><span class="lbl">Status</span>
+        <div class="row"><span class="chip-status ok">Success</span><span class="chip-status warn">Warning</span><span class="chip-status err">Failed</span></div>
+      </div>
+      <div class="comp-cell"><span class="lbl">Tree rows</span>
+        <ul class="tree-demo" style="list-style:none">
+          <li class="hover">notes.md</li>
+          <li class="active">main.tex</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>Vesper · single theme for bright and dim rooms<br>palette — app_palette.md · spec — app_theme.md</footer>
+</div>
+
+<script>
+  // The room changes; the theme does not.
+  var slider = document.getElementById('ambient');
+  var root = document.documentElement;
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function apply(t) {
+    // room background: bright plaster -> near-black
+    var r = Math.round(lerp(207, 10, t));
+    var g = Math.round(lerp(201, 9, t));
+    var b = Math.round(lerp(190, 8, t));
+    root.style.setProperty('--room', 'rgb(' + r + ',' + g + ',' + b + ')');
+    // page chrome text: dark ink on bright room -> pearl on dark room
+    var tr = Math.round(lerp(42, 242, t));
+    var tg = Math.round(lerp(36, 241, t));
+    var tb = Math.round(lerp(31, 237, t));
+    root.style.setProperty('--room-text', 'rgb(' + tr + ',' + tg + ',' + tb + ')');
+    // frame shadow: soft in bright rooms, deeper + sand rim in dark rooms
+    var sa = (lerp(0.45, 0.7, t)).toFixed(2);
+    var ra = (lerp(0.05, 0.13, t)).toFixed(2);
+    root.style.setProperty('--frame-shadow', '0 30px 90px rgba(10,8,6,' + sa + ')');
+    root.style.setProperty('--frame-rim', '0 0 0 1px rgba(179,143,111,' + ra + ')');
+  }
+  slider.addEventListener('input', function () { apply(slider.value / 100); });
+  apply(slider.value / 100);
+</script>
+</body>
+</html>
