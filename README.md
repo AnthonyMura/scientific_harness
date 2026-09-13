@@ -4,7 +4,7 @@ A lab workstation for publication preparation — one client that unifies scient
 
 ## Status
 
-Planning. The active build plan is **workbench v0**: an Electron + React UI with a Python FastAPI sidecar — file explorer, editor, LaTeX compile targets (local / wsl / ssh), embedded PDF viewer. No LLM, no Zotero, and no block IDs in this slice. See [docs/workbench_v0_plan.md](docs/workbench_v0_plan.md).
+Building. The v0 core is implemented in [`workbench/`](workbench/) (browser-first dev mode; the Electron shell comes later): file explorer with full VSCode-style file operations, CodeMirror editor, a recursive split-tree layout (VSCode-style splittable panes), embedded PDF viewer with SyncTeX, streaming log panel with clickable errors — and an **in-app TinyTeX**: a hidden TeX Live inside the app folder (`workbench/.texlive`) that the app installs, updates and extends on demand, so no system TeX is required. Remaining v0 work: the ssh compile target (M4) and final polish. No LLM, no Zotero, and no block IDs in this slice. See [docs/workbench_v0_plan.md](docs/workbench_v0_plan.md).
 
 ## Documents
 
@@ -20,4 +20,6 @@ Planning. The active build plan is **workbench v0**: an Electron + React UI with
 
 - `AGENTS.md` — environment notes for agents working in this folder
 - `docs/` — conception and plan documents
+- `workbench/` — the v0 app: `web/` (React + Vite UI), `backend/` (Python FastAPI sidecar), `.texlive/` (in-app TinyTeX, gitignored)
+- `.scratch/` — issue tracker and specs per feature
 - `external/` — reference material not part of the project (currently: a generic full-stack web app builder skill prompt, SKILL.md)
