@@ -309,19 +309,42 @@ input::placeholder { color: var(--text-3); }
 
 .pdf-host {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: auto; /* scrolls in both directions once a page outgrows the pane */
   padding: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
 }
-.pdf-host canvas {
+/* One wrapper per page, exactly canvas-sized (width: max-content): centered
+   when narrow, fully reachable by scrollbars when wide. The selectable text
+   layer is positioned absolutely inside it. */
+.pdf-page {
+  position: relative;
+  width: max-content;
+  margin: 0 auto 14px;
+}
+.pdf-page:last-child { margin-bottom: 0; }
+.pdf-page canvas {
+  display: block;
   background: var(--pearl); /* the pearl page: brightest surface in the app */
-  max-width: 100%;
-  height: auto;
   border-radius: 1px;
   box-shadow: 0 2px 12px rgba(81, 16, 12, 0.35), 0 0 0 1px var(--hairline-strong);
+}
+/* pdf.js text layer: transparent selectable glyphs aligned over the canvas
+   (ported from the official viewer's .textLayer rules). */
+.pdf-page .text-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  line-height: 1;
+  text-size-adjust: none;
+  transform-origin: 0 0;
+}
+.pdf-page .text-layer span,
+.pdf-page .text-layer br {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
 }
 
 /* ---------- run log ---------------------------------------- */

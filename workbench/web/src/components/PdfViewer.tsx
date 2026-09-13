@@ -1,5 +1,7 @@
 // PDF preview module ("latex compilation" output): renders main.pdf with
-// pdf.js; zoom is a module setting adjustable from the header.
+// pdf.js; zoom is a module setting adjustable from the header. Pages keep
+// their natural size and the host scrolls in both directions; a transparent
+// text layer over each canvas makes the text selectable.
 import React, { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -32,6 +34,7 @@ export default function PdfViewer({ ctx }: Props) {
   useEffect(() => {
     if (!ctx.projectOpen || !hostRef.current) return;
     let cancelled = false;
+    const textLayers: pdfjsLib.TextLayer[] = [];
     (async () => {
       try {
         const blob = await api.fetchPdf("main.pdf");
@@ -49,15 +52,35 @@ export default function PdfViewer({ ctx }: Props) {
         host.innerHTML = "";
         setStatus(`rendering ${doc.numPages} page(s)…`);
         for (let i = 1; i <= doc.numPages; i++) {
+          if (cancelled) break;
           const page = await doc.getPage(i);
           const viewport = page.getViewport({ scale: zoom / 100 });
+          // Page wrapper: exactly canvas-sized (width: max-content), centered
+          // when narrow, scrollable in both directions when wide or tall.
+          const pageDiv = document.createElement("div");
+          pageDiv.className = "pdf-page";
+          // pdf.js TextLayer sizes itself and its fonts via this variable.
+          pageDiv.style.setProperty("--scale-factor", String(viewport.scale));
+          host.appendChild(pageDiv);
           const canvas = document.createElement("canvas");
           canvas.width = Math.floor(viewport.width);
           canvas.height = Math.floor(viewport.height);
-          host.appendChild(canvas);
+          pageDiv.appendChild(canvas);
           // Vesper: the pearl page is the brightest surface in the app —
           // pdf.js fills the canvas with white by default, so pass the pearl background.
           await page.render({ canvasContext: canvas.getContext("2d")!, viewport, background: "#F2F1ED" }).promise;
+          if (cancelled) break;
+          // Transparent selectable text layer over the rendered canvas.
+          const textDiv = document.createElement("div");
+          textDiv.className = "text-layer";
+          pageDiv.appendChild(textDiv);
+          const layer = new pdfjsLib.TextLayer({
+            textContentSource: page.streamTextContent(),
+            container: textDiv,
+            viewport,
+          });
+          textLayers.push(layer);
+          await layer.render().catch(() => {}); // rejects on cancel — fine
         }
         if (!cancelled) setStatus("");
       } catch (e) {
@@ -66,6 +89,7 @@ export default function PdfViewer({ ctx }: Props) {
     })();
     return () => {
       cancelled = true;
+      for (const l of textLayers) l.cancel();
     };
   }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, zoom]);
 
