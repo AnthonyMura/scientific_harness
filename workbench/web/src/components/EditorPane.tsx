@@ -46,7 +46,11 @@ export default function EditorPane({ ctx, filePath }: Props) {
     (async () => {
       const r = await api.readFile(filePath);
       if (cancelled || !hostRef.current) return;
-      const lang = filePath.endsWith(".md") ? markdown() : latexLanguage;
+      const lang = filePath.endsWith(".md")
+        ? [markdown()]
+        : filePath.endsWith(".tex")
+          ? [latexLanguage]
+          : []; // any other file type opens as plain text
       const save = () => {
         if (!view) return;
         void api
