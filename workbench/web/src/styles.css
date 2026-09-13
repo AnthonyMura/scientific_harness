@@ -346,6 +346,26 @@ input::placeholder { color: var(--text-3); }
   cursor: text;
   transform-origin: 0% 0%;
 }
+/* SyncTeX forward-search flash (M3): sand-tinted box over the target line. */
+.pdf-sync-flash {
+  position: absolute;
+  border-radius: 2px;
+  background: rgba(179, 143, 111, 0.35);
+  box-shadow:
+    0 0 0 1px rgba(179, 143, 111, 0.5),
+    0 0 12px 2px rgba(179, 143, 111, 0.3);
+  pointer-events: none;
+  animation: pdf-sync-fade 1.6s ease-out forwards;
+}
+@keyframes pdf-sync-fade {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 
 /* ---------- run log ---------------------------------------- */
 
