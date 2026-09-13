@@ -1,6 +1,6 @@
 # Workbench v0 — Application Plan
 
-> **Status:** planning. Companion to technical_description_v3.md. This is the first buildable slice of the workbench: file explorer, editor, LaTeX compiler with switchable compile targets, PDF viewer. No LLM, no Zotero, no block IDs in this slice (block IDs are the next increment).
+> **Status:** building — v0 core implemented in `workbench/` (M0–M2 done, M3 in progress; see section 9). Companion to technical_description_v3.md. This is the first buildable slice of the workbench: file explorer, editor, LaTeX compiler with switchable compile targets (plus an app-local TinyTeX), PDF viewer. No LLM, no Zotero, no block IDs in this slice (block IDs are the next increment).
 
 ## 1. Purpose and definition of done
 
@@ -85,6 +85,7 @@ Notes:
 - Auto-detected default: local TeX if found on the host, else wsl on Windows, else an in-app install hint for that OS. Per-target prerequisites are documented in-app (what to install where).
 - The interface exists from day one as code, so M4 adds an implementation, not a refactor. Your current machine uses the wsl target with projects in WSL home; a Mac user uses local with MacTeX; a lab compile server later is just another ssh target.
 - Because the backend is a plain HTTP service, a later "attach from a browser on the LAN" mode (colleagues using it without installing anything) falls out of the same code. That is a future mode, not v0 scope.
+- App-local TeX (implemented; supersedes the install-hint default for this machine): the app can carry its own TinyTeX in a hidden `.texlive` folder inside the app directory (`workbench/backend/workbench_backend/tinytex.py`). It is installed and updated from the Install panel without admin rights, is preferred over any system TeX once present, and grows on demand — packages named in a failed compile log are installed via tlmgr and the compile retried. System TeX is never touched by this path.
 
 ## 6. Default template
 
@@ -108,11 +109,13 @@ The full default main.tex is in appendix A so the look can be judged before buil
 
 ## 9. Milestones
 
-- **M0 skeleton.** Electron shell, sidecar lifecycle (spawn, port discovery, shutdown), file explorer module, editor module (.tex/.md with save), new project from the default template. Acceptance: create a "classic" project, edit main.tex, save, confirm the change on disk.
-- **M1 compile.** Compile service with local and wsl targets, log panel with clickable error list, build-directory hygiene, cancel button. Acceptance: a real MDPI manuscript compiles to PDF via the chosen target; introduce a typo, the error appears, clicking it jumps to the broken line.
-- **M2 PDF.** Embedded viewer loads the compiled PDF; forward SyncTeX (caret or click in source flips the PDF to that page). Acceptance: click a paragraph, the PDF lands on its page.
-- **M3 polish.** Reverse SyncTeX (PDF to source), auto-compile on save, recent projects, image preview in the tree, compile target selector UI with per-target install hints. Acceptance: the full definition of done from section 1.
+- **M0 skeleton.** Electron shell, sidecar lifecycle (spawn, port discovery, shutdown), file explorer module, editor module (.tex/.md with save), new project from the default template. Acceptance: create a "classic" project, edit main.tex, save, confirm the change on disk. — **done** (browser-first dev mode stands in for the shell)
+- **M1 compile.** Compile service with local and wsl targets, log panel with clickable error list, build-directory hygiene, cancel button. Acceptance: a real MDPI manuscript compiles to PDF via the chosen target; introduce a typo, the error appears, clicking it jumps to the broken line. — **done**
+- **M2 PDF.** Embedded viewer loads the compiled PDF; forward SyncTeX (caret or click in source flips the PDF to that page). Acceptance: click a paragraph, the PDF lands on its page. — **done**
+- **M3 polish.** Reverse SyncTeX (PDF to source), auto-compile on save, recent projects, image preview in the tree, compile target selector UI with per-target install hints. Acceptance: the full definition of done from section 1. — **in progress**
 - **M4 remote.** ssh target: key-based auth, project sync up, compile on the remote machine, pull back PDF + synctex + log. Acceptance: compile a project against a machine on the LAN; artifacts appear in the app and sync works against the remote paths.
+
+> Progress (September 2026): M0–M2 done, M3 in progress. Shipped beyond the original plan: the VSCode-style split-tree layout (`.scratch/module-workbench/issues/05-vscode-style-layout.md`) and the in-app TinyTeX (`.scratch/module-workbench/issues/06-in-app-tex.md`).
 
 ## 10. Relation to v3
 
