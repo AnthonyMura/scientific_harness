@@ -1,0 +1,21 @@
+{
+  "name": "workbench-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "concurrently -k \"npm:dev:web\" \"npm:dev:sidecar\"",
+    "dev:full": "concurrently -k \"npm:dev:web\" \"npm:dev:sidecar\" \"npm:dev:electron\"",
+    "dev:web": "cd ../web && npm run dev",
+    "dev:sidecar": "cd ../backend && WORKBENCH_TOKEN=devtoken ./.venv/bin/python -m workbench_backend serve --port 8765 --reload",
+    "dev:electron": "wait-on tcp:127.0.0.1:5199 tcp:127.0.0.1:8765 && cross-env WORKBENCH_WEB_URL=http://127.0.0.1:5199 WORKBENCH_BACKEND_URL=http://127.0.0.1:8765 WORKBENCH_TOKEN=devtoken electron .",
+    "build:web": "cd ../web && npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "wait-on": "^8.0.0"
+  }
+}
