@@ -1,0 +1,44 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{newpxtext,newpxmath} % Palatino-like serif, classic book typography
+\usepackage{microtype}           % refined spacing and character protrusion
+\usepackage[a4paper,top=2.8cm,bottom=3.0cm,left=2.6cm,right=2.6cm]{geometry}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage[font=small,labelfont=bf]{caption}
+\usepackage{booktabs}            % classic rule style for tables
+\usepackage[colorlinks=false,pdftitle={Manuscript}]{hyperref}
+
+\begin{document}
+
+\begin{titlepage}
+\begin{center}
+  {\LARGE Manuscript title}\\[1.2em]
+  {\large Author One, Author Two}\\[0.6em]
+  {\normalsize Affiliation, City, Country}\\[2.5em]
+  \today
+\end{center}
+\end{titlepage}
+
+\begin{abstract}
+Text of the abstract goes here.
+\end{abstract}
+
+\section{Introduction}
+
+The main text starts here.
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.8\linewidth]{figures/example.png}
+  \caption{Example figure with its caption.}
+  \label{fig:example}
+\end{figure}
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

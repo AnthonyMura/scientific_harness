@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workbench-backend"
+version = "0.1.0"
+description = "Python sidecar backend for the Scientific Writing Workbench (v0)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+]
+
+[project.scripts]
+workbench-backend = "workbench_backend.__main__:main"
+
+[tool.setuptools]
+packages = ["workbench_backend"]
