@@ -1,0 +1,4 @@
+# OS / editor artifacts (workbench/ has its own .gitignore for build output)
+*.Zone.Identifier
+Thumbs.db
+.DS_Store
