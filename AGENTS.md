@@ -53,3 +53,4 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
   - `app: <summary>` — top-level shell wiring (App.tsx, ProjectBar)
   - `docs(<area>):` / `chore(<area>):` — documentation and repo hygiene
 - One logical module change per commit. Build artifacts (node_modules, dist, .venv, __pycache__) stay ignored via workbench/.gitignore.
+- **Commit before ending work**: at the end of every task or session, commit all changes — code, docs, tickets — so the working tree is left clean. If something is genuinely unfinished, record its state in the relevant issue ticket under `.scratch/` instead of leaving it uncommitted.
