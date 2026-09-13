@@ -30,3 +30,12 @@ Default vocabulary, label string equals role name. See `docs/agents/triage-label
 ### Domain docs
 
 Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
+## Version control
+
+- Commit messages are scoped by module so history shows where each change landed:
+  - `module(<name>): <summary>` — app modules: backend, app-shell, layout, workbench-shell, explorer, editor, pdf-viewer, log-panel, install
+  - `web(core): <summary>` — shared web plumbing (api client, types, Vesper theme, icons, base styles)
+  - `app: <summary>` — top-level shell wiring (App.tsx, ProjectBar)
+  - `docs(<area>):` / `chore(<area>):` — documentation and repo hygiene
+- One logical module change per commit. Build artifacts (node_modules, dist, .venv, __pycache__) stay ignored via workbench/.gitignore.
