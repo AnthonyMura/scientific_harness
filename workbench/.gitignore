@@ -1,0 +1,14 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# generated at runtime by the Electron shell (workbench/app/src/main.js)
+backend/workbench_backend/_sidecar_entry.sh
+backend/workbench_backend/_sidecar_kill.sh
+app/workbench-shell.log
+
+# per-project state and build output (created by the sidecar)
+.workbench/
