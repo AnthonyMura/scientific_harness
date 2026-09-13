@@ -332,6 +332,12 @@ export default function FileExplorer({ ctx }: Props) {
                         <button type="button" title="New Folder inside this folder" onClick={(ev) => { ev.stopPropagation(); startCreateIn(e.path, "dir"); }}>
                           <FolderPlusIcon size={13} />
                         </button>
+                        <button type="button" title="Rename (F2)" onClick={(ev) => { ev.stopPropagation(); startRename(e); }}>
+                          <PencilIcon size={13} />
+                        </button>
+                        <button type="button" title="Delete" className="danger" onClick={(ev) => { ev.stopPropagation(); setConfirmDelete({ path: e.path, name: e.name, isDir: true }); }}>
+                          <TrashIcon size={13} />
+                        </button>
                       </>
                     ) : (
                       <>
