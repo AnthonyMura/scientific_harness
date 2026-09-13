@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { FileEntry } from "../types";
 import type { AppCtx } from "../modules/ctx";
+import { FILE_DRAG_MIME } from "../modules/layout";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import ContextMenu from "./ContextMenu";
@@ -20,7 +21,6 @@ export const EXPLORER_SETTINGS: SettingControl[] = [
 ];
 export const EXPLORER_DEFAULTS: ModuleSettings = { fontSize: 13, showHidden: false };
 
-const EDITABLE = (n: string) => /\.(tex|md)$/i.test(n);
 
 /** File-type picker entries for "New File…" (PyCharm-style). */
 const FILE_TYPES: { label: string; ext: string }[] = [
@@ -217,8 +217,7 @@ export default function FileExplorer({ ctx }: Props) {
 
   function rowClick(e: FileEntry) {
     setSelected(e.path);
-    if (e.is_dir) toggle(e.path); // clicking a folder expands / collapses it
-    else if (EDITABLE(e.name)) ctx.onOpenFile(e.path);
+    if (e.is_dir) toggle(e.path); // single click: select + expand/collapse folders
   }
 
   if (!ctx.projectOpen) {
@@ -236,7 +235,7 @@ export default function FileExplorer({ ctx }: Props) {
             { label: "Delete", icon: <TrashIcon size={13} />, danger: true, action: () => setConfirmDelete({ path: menu.entry!.path, name: menu.entry!.name, isDir: true }) },
           ]
         : [
-            { label: EDITABLE(menu.entry.name) ? "Open" : "Open (read-only)", icon: <PencilIcon size={13} />, disabled: !EDITABLE(menu.entry.name), action: () => ctx.onOpenFile(menu.entry!.path) },
+            { label: "Open", icon: <PencilIcon size={13} />, action: () => ctx.onOpenFile(menu.entry!.path) },
             { separator: true },
             { label: "Rename", icon: <PencilIcon size={13} />, action: () => startRename(menu.entry!) },
             { label: "Delete", icon: <TrashIcon size={13} />, danger: true, action: () => setConfirmDelete({ path: menu.entry!.path, name: menu.entry!.name, isDir: false }) },
@@ -295,7 +294,14 @@ export default function FileExplorer({ ctx }: Props) {
                 }
                 style={{ paddingLeft: 8 + depth * 14 }}
                 onClick={() => rowClick(e)}
-                onDoubleClick={() => startRename(e)}
+                onDoubleClick={() => { if (!e.is_dir) ctx.onOpenFile(e.path); }}
+                draggable={!e.is_dir}
+                onDragStart={(ev) => {
+                  if (e.is_dir) return;
+                  ev.dataTransfer.setData(FILE_DRAG_MIME, e.path);
+                  ev.dataTransfer.setData("text/plain", e.path);
+                  ev.dataTransfer.effectAllowed = "copy";
+                }}
                 onContextMenu={(ev) => {
                   ev.preventDefault();
                   setSelected(e.path);
