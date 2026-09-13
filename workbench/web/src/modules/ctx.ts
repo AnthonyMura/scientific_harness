@@ -3,6 +3,8 @@ import type { ActiveJob } from "../types";
 
 export interface AppCtx {
   projectOpen: boolean;
+  /** Absolute root of the open project (null when none) — per-project reload key. */
+  projectRoot: string | null;
   /** File path of the active center editor tab (for explorer highlighting). */
   activeFile: string | null;
   pdfVersion: number;
