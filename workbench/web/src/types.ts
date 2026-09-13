@@ -47,6 +47,7 @@ export interface TargetStatus {
   install_hint: string;
   install_command: string;
   distros: string[];
+  recommended?: boolean;
 }
 
 export interface ConfigResponse {

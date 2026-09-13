@@ -378,6 +378,7 @@ input::placeholder { color: var(--text-3); }
 .chip.done { color: var(--ok); }
 .chip.error { color: var(--err); background: var(--err-tint); }
 .chip.cancelled { color: var(--warn); }
+.chip.rec { color: var(--gold); background: transparent; border: 1px solid rgba(179, 143, 111, 0.5); }
 
 /* ---------- install panel ---------------------------------- */
 

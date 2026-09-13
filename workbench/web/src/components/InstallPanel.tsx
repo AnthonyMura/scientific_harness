@@ -43,7 +43,10 @@ export default function InstallPanel({ ctx }: Props) {
           {targets.map((t) => (
             <div key={t.name} className={"card" + (t.tex_found && t.missing.length === 0 ? " ok" : "")}>
               <div className="card-title">
-                <span>{t.name}</span>
+                <span>
+                  {t.name}
+                  {t.recommended && <span className="chip rec" title="Installs into a hidden folder inside the app — no admin rights, only this app uses it">recommended</span>}
+                </span>
                 <span className={"chip " + (t.tex_found ? "done" : t.available ? "cancelled" : "error")}>
                   {t.tex_found ? "TeX found" : t.available ? "missing" : "unavailable"}
                 </span>
