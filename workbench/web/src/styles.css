@@ -764,14 +764,3 @@ code {
 /* pdf zoom label */
 .zoom-label { min-width: 42px; text-align: center; font-size: 11px; color: var(--text-2); font-family: var(--font-mono); }
 
-/* ruby accents (palette: brick / crimson oxblood) */
-.ab-item.active::before {
-  content: "";
-  position: absolute;
-  left: -5px;
-  top: 7px;
-  bottom: 7px;
-  width: 2px;
-  border-radius: 1px;
-  background: var(--brick); /* ruby indicator on the activity bar edge */
-}
