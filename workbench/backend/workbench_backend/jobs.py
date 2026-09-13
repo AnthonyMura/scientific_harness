@@ -26,6 +26,10 @@ class Job:
         with self._lock:
             self._log.append(line.rstrip("\r\n"))
 
+    def text(self) -> str:
+        with self._lock:
+            return "\n".join(self._log)
+
     def finish(self, status: str, exit_code: int | None = None) -> None:
         with self._lock:
             self.status = status

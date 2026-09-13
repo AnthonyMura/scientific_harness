@@ -22,20 +22,14 @@ import subprocess
 import threading
 from dataclasses import dataclass, field
 
+from . import tinytex
 from .errors import ApiError
 from .jobs import JobRegistry
 from .targets import host_os, list_wsl_distros, wsl_distro_from_root
 
-# Files the built-in classic template needs (plan appendix A). The in-app
-# install hint lists texlive-fonts-extra specifically for newpx.
-REQUIRED_FILES = [
-    ("newpxtext.sty", "texlive-fonts-extra"),
-    ("microtype.sty", "texlive-latex-recommended"),
-    ("booktabs.sty", "texlive-latex-recommended"),
-    ("hyperref.sty", "texlive-latex-base"),
-    ("geometry.sty", "texlive-latex-recommended"),
-    ("amsmath.sty", "texlive-latex-base"),
-]
+# Files the built-in classic template needs — single source of truth lives in
+# tinytex.py (shared with the in-app installer and the on-demand repair).
+REQUIRED_FILES = tinytex.REQUIRED_FILES
 
 APT_PACKAGES = [
     "texlive-latex-base",
@@ -64,6 +58,7 @@ class TargetStatus:
     install_hint: str = ""
     install_command: str = ""
     distros: list[str] = field(default_factory=list)
+    recommended: bool = False
 
 
 def _run(cmd, timeout=30):
@@ -110,6 +105,45 @@ def local_install_spec():
             return cmd, hint
         return None
     return None
+
+
+def probe_tinytex() -> TargetStatus:
+    """The in-app TinyTeX: a hidden TeX Live inside the app folder."""
+    st = TargetStatus(name="in-app TinyTeX", available=True, recommended=True)
+    prefix = tinytex.find_prefix()
+    if prefix is None:
+        st.detail = (
+            f"not installed yet. Installs into {tinytex.texlive_dir()} — a hidden folder "
+            "inside the app directory, used and modified only by this app."
+        )
+        st.can_install = True
+        st.install_hint = (
+            "Downloads the official TinyTeX-1 release (~50 MB) and extracts it into the "
+            "app's hidden .texlive folder. No admin rights needed; packages missing from "
+            "your documents are added automatically as you compile."
+        )
+        st.install_command = f"(runs inside the app → {tinytex.texlive_dir()})"
+        return st
+    b = tinytex.bin_dir(prefix)
+    if b is None or not (b / "latexmk").exists():
+        st.detail = f"found at {prefix} but incomplete — reinstall to repair"
+        st.can_install = True
+        st.install_hint = "Re-runs the installer: updates the existing copy and repairs missing parts."
+        st.install_command = f"(runs inside the app → {prefix})"
+        return st
+    st.tex_found = True
+    st.version = tinytex.version_lines(prefix)
+    if (b / "kpsewhich").exists():
+        for fname, pkg in REQUIRED_FILES:
+            rc, out = _run([str(b / "kpsewhich"), fname], timeout=15)
+            if rc != 0 or not out.strip():
+                st.missing.append({"file": fname, "package": pkg})
+    extra = f"; missing {len(st.missing)} required file(s)" if st.missing else ""
+    st.detail = f"installed in {prefix}{extra}"
+    st.can_install = True
+    st.install_hint = "Updates the in-app copy (tlmgr update) and re-checks the template packages."
+    st.install_command = f"(runs inside the app → {prefix})"
+    return st
 
 
 def probe_local() -> TargetStatus:
@@ -200,13 +234,17 @@ def probe_wsl(st) -> TargetStatus:
 
 
 def status(st) -> list[dict]:
-    out = [probe_local()]
+    out = [probe_tinytex(), probe_local()]
     if host_os() == "windows":
         out.append(probe_wsl(st))
     return out
 
 
 def start_install(st, jobs: JobRegistry, target: str, distro: str | None = None) -> str:
+    if target in ("tinytex", "in-app TinyTeX"):
+        job = jobs.create("install", "install in-app TinyTeX")
+        threading.Thread(target=tinytex.install, args=(job,), daemon=True).start()
+        return job.id
     if target == "wsl":
         d = distro or _wsl_distro_for(st)
         if not d:
