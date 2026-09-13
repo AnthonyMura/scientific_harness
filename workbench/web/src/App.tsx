@@ -244,6 +244,7 @@ export default function App() {
   const ctx: AppCtx = useMemo(
     () => ({
       projectOpen: !!project,
+      projectRoot: project?.root ?? null,
       activeFile,
       pdfVersion,
       job,
