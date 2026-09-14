@@ -92,6 +92,16 @@ export const api = {
     return res.blob();
   },
 
+  /** Raw bytes of any project file (PDF reading); null when the backend refuses. */
+  fetchRawFile: async (path: string): Promise<Blob | null> => {
+    const c = apiConfig();
+    const res = await fetch(`${c.baseUrl}/api/files/raw-file?path=${encodeURIComponent(path)}`, {
+      headers: { "X-Workbench-Token": c.token },
+    });
+    if (!res.ok) return null;
+    return res.blob();
+  },
+
   startCompile: (main_file?: string, target?: string) =>
     request<{ job_id: string }>("POST", "/api/compile/start", { main_file, target }),
   jobStatus: (jobId: string, since = 0) =>

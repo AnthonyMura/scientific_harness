@@ -1,5 +1,5 @@
 // Shared application context handed to every module render.
-import type { ActiveJob } from "../types";
+import type { ActiveJob, Project, SshConfig, TargetStatus } from "../types";
 
 /** One-way sync request between editor and PDF (SyncTeX, M3). */
 export interface SyncRequest {
@@ -19,6 +19,24 @@ export interface AppCtx {
   activeFile: string | null;
   /** True when the focused pane's active tab is an editor tab — a single click in the Explorer opens files. */
   editorFocused: boolean;
+  /** The open project (null when none) — pane headers need its config. */
+  project: Project | null;
+  /** Project-relative path of a static PDF shown in the PDF pane (null = compiled main.pdf). */
+  pdfFile: string | null;
+  /** Open a project PDF file read-only in the PDF pane. */
+  onOpenPdf: (path: string) => void;
+  /** Show the compiled main.pdf output in the PDF pane again. */
+  onShowMainPdf: () => void;
+  /** Start a manual compile of the project's main file. */
+  onCompile: () => void;
+  autoCompile: boolean;
+  onAutoCompile: (on: boolean) => void;
+  targetStatuses: TargetStatus[] | null;
+  onTarget: (target: string) => void;
+  /** Persist the SSH compile-target config for the current project (M4). */
+  onSaveSsh: (cfg: SshConfig) => void;
+  /** Open the Install TeX pane. */
+  onShowInstall: () => void;
   pdfVersion: number;
   job: ActiveJob | null;
   onOpenFile: (path: string) => void;
