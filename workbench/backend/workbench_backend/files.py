@@ -7,6 +7,7 @@ and falls back to copy+remove when the share refuses a direct rename.
 
 from __future__ import annotations
 
+import mimetypes
 import os
 import shutil
 from pathlib import Path
@@ -14,6 +15,9 @@ from pathlib import Path
 from .errors import ApiError
 
 EDITABLE_SUFFIXES = {".tex", ".md"}
+
+#: Safety cap for raw image serving (tree thumbnails, M3).
+RAW_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 
 def safe_path(root: Path, rel: str | None) -> Path:
@@ -64,6 +68,20 @@ def read_file(root: Path, rel: str) -> dict:
     except UnicodeDecodeError:
         raise ApiError(415, "binary file; only .tex/.md text files are editable") from None
     return {"path": rel, "content": content}
+
+
+def raw_image(root: Path, rel: str) -> tuple[bytes, str]:
+    """Raw bytes + media type of an image file (tree thumbnails, M3)."""
+    p = safe_path(root, rel)
+    if not p.is_file():
+        raise ApiError(404, f"not a file: {rel}")
+    media_type = mimetypes.guess_type(p.name)[0]
+    if not media_type or not media_type.startswith("image/"):
+        raise ApiError(415, "not an image file") from None
+    size = p.stat().st_size
+    if size > RAW_IMAGE_MAX_BYTES:
+        raise ApiError(413, f"file too large for preview ({size} bytes)") from None
+    return p.read_bytes(), media_type
 
 
 def write_file(root: Path, rel: str, content: str) -> dict:

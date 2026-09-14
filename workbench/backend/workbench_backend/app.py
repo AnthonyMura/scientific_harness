@@ -18,7 +18,7 @@ from pathlib import Path
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from . import __version__, compile_service, files, install, projects, state
 from .errors import ApiError
@@ -94,6 +94,13 @@ def create_app(token: str) -> FastAPI:
     def files_read(path: str):
         root = projects.root_of(st)
         return files.read_file(root, path)
+
+    @app.get("/api/files/raw")
+    def files_raw(path: str):
+        """Raw image bytes for tree thumbnails (M3)."""
+        root = projects.root_of(st)
+        data, media_type = files.raw_image(root, path)
+        return Response(content=data, media_type=media_type, headers={"Cache-Control": "no-store"})
 
     @app.put("/api/files/write")
     def files_write(body: dict):
