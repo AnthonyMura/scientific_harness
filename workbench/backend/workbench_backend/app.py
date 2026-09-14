@@ -168,7 +168,11 @@ def create_app(token: str) -> FastAPI:
         p = state.build_dir(root) / name
         if not p.is_file():
             raise ApiError(404, f"no such artifact: {name}")
-        return FileResponse(str(p), media_type="application/pdf", filename=name)
+        # no-store: build output changes on every compile — a heuristically
+        # cached copy would keep showing stale pages in the PDF pane.
+        return FileResponse(
+            str(p), media_type="application/pdf", filename=name, headers={"Cache-Control": "no-store"}
+        )
 
     @app.get("/api/artifacts/synctex")
     def artifact_synctex(file: str = "main.synctex.gz"):
@@ -179,7 +183,7 @@ def create_app(token: str) -> FastAPI:
         if not p.is_file():
             raise ApiError(404, f"no such artifact: {name}")
         raw = gzip.open(p, "rb").read()
-        return PlainTextResponse(raw.decode("utf-8", errors="replace"))
+        return PlainTextResponse(raw.decode("utf-8", errors="replace"), headers={"Cache-Control": "no-store"})
 
     # --- config ----------------------------------------------------------------
     @app.get("/api/config")
