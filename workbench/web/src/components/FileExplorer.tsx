@@ -145,6 +145,15 @@ export default function FileExplorer({ ctx }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showHidden]);
 
+  // External changes (Save version / Save As in the PDF pane): reload the tree.
+  const treeTickSeen = useRef(ctx.treeTick);
+  useEffect(() => {
+    if (!ctx.projectOpen || ctx.treeTick === treeTickSeen.current) return;
+    treeTickSeen.current = ctx.treeTick;
+    void reloadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.treeTick]);
+
   function entryAt(path: string): FileEntry | undefined {
     return byDir[parentDir(path)]?.find((e) => e.path === path);
   }
@@ -194,6 +203,7 @@ export default function FileExplorer({ ctx }: Props) {
     try {
       await api.createPath((c.dir ? c.dir + "/" : "") + name, c.kind);
       void load(c.dir);
+      ctx.refreshTexFiles();
     } catch (e) {
       setError(errMsg(e));
     }
@@ -218,6 +228,7 @@ export default function FileExplorer({ ctx }: Props) {
       await api.renamePath(r.path, target);
       ctx.onFileRenamed(r.path, target);
       void load(parentDir(r.path));
+      ctx.refreshTexFiles();
     } catch (e) {
       setError(errMsg(e));
     }
@@ -231,6 +242,7 @@ export default function FileExplorer({ ctx }: Props) {
       await api.deletePath(c.path);
       ctx.onPathsGone([c.path]);
       void load(parentDir(c.path));
+      ctx.refreshTexFiles();
       if (selected && (selected === c.path || selected.startsWith(c.path + "/"))) setSelected(null);
     } catch (e) {
       setError(errMsg(e));
