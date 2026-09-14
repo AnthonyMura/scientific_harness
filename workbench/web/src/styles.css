@@ -939,9 +939,27 @@ code {
   z-index: 1;
 }
 
-/* Live reflow: panes glide while a tab/module drag is in flight. */
-.wb-main.dragging .split-child {
+/* Pane motion: sizes glide on every reflow — live drag reflow, divider
+   resets, and the shrink/grow of panes opening and closing. */
+.split-child {
   transition: width 160ms cubic-bezier(0.25, 0.8, 0.35, 1), height 160ms cubic-bezier(0.25, 0.8, 0.35, 1);
+}
+
+/* A fresh pane grows in from zero when a split is created: child a animates
+   from --enter-from (0% when the new pane is a, 100% when it is b) to its
+   ratio; the sibling follows along via flex layout. */
+.split.h > .split-child.enter { animation: pane-in-w 200ms cubic-bezier(0.25, 0.8, 0.35, 1); }
+.split.v > .split-child.enter { animation: pane-in-h 200ms cubic-bezier(0.25, 0.8, 0.35, 1); }
+@keyframes pane-in-w { from { width: var(--enter-from, 0%); } }
+@keyframes pane-in-h { from { height: var(--enter-from, 0%); } }
+
+/* The emptied pane fades as it shrinks away before its removal commits. */
+.group.dying { opacity: 0; transition: opacity 180ms ease; }
+
+@media (prefers-reduced-motion: reduce) {
+  .split-child { transition: none; }
+  .split.h > .split-child.enter, .split.v > .split-child.enter { animation: none; }
+  .group.dying { transition: none; }
 }
 
 /* Activity bar items are draggable module sources. */

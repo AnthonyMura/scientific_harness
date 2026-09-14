@@ -90,7 +90,7 @@ function groupOfTab(state: LayoutState, tabId: string): string | null {
 }
 
 /** Parent split of a node id (depth-first from the root), or null. */
-function findParent(
+export function findParent(
   nodes: Record<string, Node>,
   rootId: string,
   id: string,

@@ -4,9 +4,9 @@
 // any of a pane's four edges creates a new pane on that side, and dropping
 // anywhere else inserts into the pane (empty panes light up as drop targets).
 // A quiet quote from Newton sits behind every pane.
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppCtx } from "../modules/ctx";
-import { FILE_DRAG_MIME, MODULE_DRAG_MIME, TAB_DRAG_MIME, pathToGroup } from "../modules/layout";
+import { FILE_DRAG_MIME, MODULE_DRAG_MIME, TAB_DRAG_MIME, findParent, layoutReducer, pathToGroup } from "../modules/layout";
 import type { LayoutAction, LayoutState, Tab } from "../modules/layout";
 import { MODULE_DEFS, MODULE_ORDER } from "../modules/defs";
 import { MODULES } from "../modules/registry";
@@ -28,6 +28,12 @@ interface WB {
   over: Over | null;
   /** Preview ratios for the splits on the hovered pane's path (live reflow). */
   preview: Record<string, number> | null;
+  /** splitId -> starting share of child a, for panes growing in after a split. */
+  entrance: Record<string, number>;
+  /** The pane currently shrinking away before its removal commits. */
+  closing: { splitId: string; groupId: string; ratio: number } | null;
+  /** Drop an entrance entry once its animation has played. */
+  onEntered: (splitId: string) => void;
   setDrag: (d: DragState | null) => void;
   setOver: (o: Over | null) => void;
 }
@@ -63,24 +69,66 @@ export default function Workbench({
   const [drag, setDrag] = useState<DragState | null>(null);
   const [over, setOver] = useState<Over | null>(null);
 
+  // Pane open/close motion. When an action empties a non-root pane we first
+  // shrink it to ~0 (a ratio override on its parent split), then commit the
+  // action so the sibling glides into the freed space; the emptied pane fades
+  // out meanwhile (`closing`). Splits that appear with one brand-new group
+  // child animate that child in from zero (`entrance`).
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
+  const [closing, setClosing] = useState<{ splitId: string; groupId: string; ratio: number } | null>(null);
+  const pendingRef = useRef<{ timer: number; action: LayoutAction } | null>(null);
+
+  const animatedDispatch = useCallback(
+    (action: LayoutAction) => {
+      if (pendingRef.current) {
+        window.clearTimeout(pendingRef.current.timer);
+        const flushed = pendingRef.current.action;
+        dispatch(flushed); // flush the in-flight collapse first
+        layoutRef.current = layoutReducer(layoutRef.current, flushed); // keep detection in sync
+        pendingRef.current = null;
+        setClosing(null);
+      }
+      const cur = layoutRef.current;
+      const next = layoutReducer(cur, action);
+      if (next === cur) return;
+      const removed = Object.keys(cur.nodes).filter((id) => cur.nodes[id].kind === "group" && !next.nodes[id]);
+      const p = removed.length === 1 ? findParent(cur.nodes, cur.rootId, removed[0]) : null;
+      if (p) {
+        setClosing({ splitId: p.split.id, groupId: removed[0], ratio: p.which === "a" ? 0.02 : 0.98 });
+        pendingRef.current = {
+          action,
+          timer: window.setTimeout(() => {
+            pendingRef.current = null;
+            setClosing(null);
+            dispatch(action);
+          }, 210),
+        };
+        return;
+      }
+      dispatch(action);
+    },
+    [dispatch],
+  );
+
   // Ctrl+W closes the focused pane's active tab; Esc exits fullscreen.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape" && layout.fullscreen) {
-        dispatch({ type: "fullscreen", nodeId: null });
+        animatedDispatch({ type: "fullscreen", nodeId: null });
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "w") {
         const g = layout.focusedGroup ? layout.nodes[layout.focusedGroup] : null;
         if (g && g.kind === "group" && g.active) {
           e.preventDefault();
-          dispatch({ type: "close", tabId: g.active });
+          animatedDispatch({ type: "close", tabId: g.active });
         }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [layout, dispatch]);
+  }, [layout, animatedDispatch]);
 
   // Live reflow: while a drag hovers a pane, grow the hovered branch to GROW
   // at every split on its path so neighbours step aside and make room.
@@ -96,9 +144,41 @@ export default function Workbench({
     return m;
   }, [drag, over, layout]);
 
+  // Entrance map: for splits that just appeared with exactly one brand-new
+  // group child, the starting share of child a (the fresh pane grows in).
+  const [entrance, setEntrance] = useState<Record<string, number>>({});
+  const prevNodesRef = useRef(layout.nodes);
+  useEffect(() => {
+    const prev = prevNodesRef.current;
+    if (prev === layout.nodes) return;
+    prevNodesRef.current = layout.nodes;
+    const add: Record<string, number> = {};
+    for (const id of Object.keys(layout.nodes)) {
+      const n = layout.nodes[id];
+      if (n.kind !== "split" || prev[id]) continue;
+      const aNew = !prev[n.a];
+      const bNew = !prev[n.b];
+      if (aNew && !bNew) add[id] = 0; // new pane is child a: grows from 0
+      else if (bNew && !aNew) add[id] = 1; // new pane is child b: a shrinks from full
+    }
+    if (Object.keys(add).length) setEntrance((m) => ({ ...m, ...add }));
+  }, [layout.nodes]);
+  const onEntered = useCallback((splitId: string) => {
+    setEntrance((m) => {
+      if (!(splitId in m)) return m;
+      const rest = { ...m };
+      delete rest[splitId];
+      return rest;
+    });
+  }, []);
+
+  // While a pane is closing, its parent split's ratio is overridden so the
+  // emptied side shrinks to ~0 before the removal commits.
+  const effPreview = closing ? { ...preview, [closing.splitId]: closing.ratio } : preview;
+
   const wb = useMemo<WB>(
-    () => ({ layout, dispatch, ctx, drag, over, preview, setDrag, setOver }),
-    [layout, dispatch, ctx, drag, over, preview],
+    () => ({ layout, dispatch: animatedDispatch, ctx, drag, over, preview: effPreview, entrance, closing, onEntered, setDrag, setOver }),
+    [layout, animatedDispatch, ctx, drag, over, effPreview, entrance, closing, onEntered],
   );
   const rootId = layout.fullscreen ?? layout.rootId;
   if (!layout.nodes[rootId]) return null;
@@ -116,7 +196,7 @@ export default function Workbench({
           </div>
           <NodeView id={rootId} />
           {layout.fullscreen && (
-            <button className="fs-exit" title="Exit fullscreen (Esc)" onClick={() => dispatch({ type: "fullscreen", nodeId: null })}>
+            <button className="fs-exit" title="Exit fullscreen (Esc)" onClick={() => animatedDispatch({ type: "fullscreen", nodeId: null })}>
               <XIcon size={14} />
             </button>
           )}
@@ -162,15 +242,26 @@ function ActivityBar() {
 }
 
 function NodeView({ id }: { id: string }) {
-  const { layout, preview } = useWB();
+  const { layout, preview, entrance, onEntered } = useWB();
   const node = layout.nodes[id];
   if (!node) return null;
   if (node.kind === "group") return <GroupView id={id} />;
   const h = node.dir === "h";
   const ratio = preview?.[node.id] ?? node.ratio;
+  const enterFrom = entrance[node.id];
+  const childStyle = {
+    ...(h ? { width: `${ratio * 100}%` } : { height: `${ratio * 100}%` }),
+    ...(enterFrom !== undefined ? { "--enter-from": `${enterFrom * 100}%` } : {}),
+  } as React.CSSProperties;
   return (
     <div className={"split " + (h ? "h" : "v")}>
-      <div className="split-child" style={h ? { width: `${ratio * 100}%` } : { height: `${ratio * 100}%` }}>
+      <div
+        className={"split-child" + (enterFrom !== undefined ? " enter" : "")}
+        style={childStyle}
+        onAnimationEnd={(e) => {
+          if (enterFrom !== undefined && e.target === e.currentTarget) onEntered(node.id);
+        }}
+      >
         <NodeView id={node.a} />
       </div>
       <Divider id={node.id} dir={node.dir} />
@@ -212,7 +303,7 @@ function Divider({ id, dir }: { id: string; dir: "h" | "v" }) {
 }
 
 function GroupView({ id }: { id: string }) {
-  const { layout, dispatch, ctx, drag, over, setDrag, setOver } = useWB();
+  const { layout, dispatch, ctx, drag, over, setDrag, setOver, closing } = useWB();
   const ref = useRef<HTMLDivElement | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
 
@@ -316,7 +407,12 @@ function GroupView({ id }: { id: string }) {
 
   return (
     <div
-      className={"group" + (tabs.length === 0 ? " empty" : "") + (dropTarget ? " drop-target" : "")}
+      className={
+        "group" +
+        (tabs.length === 0 ? " empty" : "") +
+        (dropTarget ? " drop-target" : "") +
+        (closing?.groupId === id ? " dying" : "")
+      }
       ref={ref}
       onDragOver={onDragOver}
       onDrop={onDrop}
