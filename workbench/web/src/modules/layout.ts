@@ -35,6 +35,7 @@ export interface LayoutState {
 export type LayoutAction =
   | { type: "open"; moduleId: string; params?: Record<string, unknown>; groupId?: string }
   | { type: "activate"; groupId: string; tabId: string }
+  | { type: "attachFile"; tabId: string; filePath: string }
   | { type: "focus"; groupId: string }
   | { type: "close"; tabId: string }
   | { type: "move"; tabId: string; groupId: string; index?: number }
@@ -286,6 +287,28 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
         nodes: setGroupActive(state.nodes, action.groupId, action.tabId),
         focusedGroup: action.groupId,
         lastEditor: t?.moduleId === "editor" ? action.tabId : state.lastEditor,
+      };
+    }
+
+    case "attachFile": {
+      // Give an existing empty editor tab its file instead of stacking a new one.
+      const t = state.tabs[action.tabId];
+      if (!t || t.moduleId !== "editor" || t.params?.filePath) return state;
+      const g = groupOfTab(state, action.tabId);
+      if (!g) return state;
+      return {
+        ...state,
+        tabs: {
+          ...state.tabs,
+          [action.tabId]: {
+            ...t,
+            title: action.filePath.split("/").pop() || t.title,
+            params: { filePath: action.filePath },
+          },
+        },
+        nodes: setGroupActive(state.nodes, g, action.tabId),
+        focusedGroup: g,
+        lastEditor: action.tabId,
       };
     }
 
