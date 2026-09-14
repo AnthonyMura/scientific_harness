@@ -122,6 +122,10 @@ class CompileService:
             except Exception as e:
                 job.log(f"failed to restart latexmk: {e}")
                 break
+        try:
+            target.collect_artifacts(root, main_file, build_dir)
+        except Exception as e:  # artifact pull-back must not mask the compile result
+            job.log(f"failed to collect artifacts from the remote: {e}")
         job.errors.extend(parser.errors)
         pdf = build_dir / f"{stem}.pdf"
         synctex = build_dir / f"{stem}.synctex.gz"

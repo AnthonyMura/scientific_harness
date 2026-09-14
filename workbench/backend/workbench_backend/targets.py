@@ -6,6 +6,7 @@ target arrives in M4 behind the same interface.
 
 from __future__ import annotations
 
+import gzip
 import os
 import re
 import shlex
@@ -91,6 +92,9 @@ class CompileTarget:
         self, root: Path, main_file: str, build_dir: Path, force: bool = False
     ) -> subprocess.Popen:
         raise NotImplementedError
+
+    def collect_artifacts(self, root: Path, main_file: str, build_dir: Path) -> None:
+        """Bring build artifacts into the local build dir (no-op for local targets)."""
 
 
 class LocalTarget(CompileTarget):
@@ -212,6 +216,150 @@ class WslTarget(CompileTarget):
         )
 
 
+class SshTarget(CompileTarget):
+    """TeX on another machine (plan section 5, M4).
+
+    Key-based ssh only (BatchMode — never a password prompt). The project is
+    synced up with a tar-over-ssh pipe, latexmk runs there, and PDF + synctex
+    (+ log) are pulled back into the local build dir; synctex Input paths are
+    rewritten from the remote absolute root to the local one so SyncTeX
+    lookups work unchanged (plan risk 2).
+    """
+
+    name = "ssh"
+
+    def __init__(self, cfg: dict, root: Path) -> None:
+        self.root = root
+        self.host = str(cfg.get("host") or "").strip()
+        self.user = str(cfg.get("user") or "").strip()
+        try:
+            self.port = int(cfg.get("port") or 22)
+        except (TypeError, ValueError):
+            self.port = 22
+        self.key = str(cfg.get("key") or "").strip()
+        self.remote_dir = str(cfg.get("remote_dir") or "").strip() or f"~/workbench/{root.name}"
+        self.remote_abs: str | None = None  # resolved on first contact
+
+    def _configured(self) -> bool:
+        return bool(self.host and self.user)
+
+    def _ssh_argv(self, remote_cmd: str) -> list[str]:
+        opts = [
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=15",
+            "-o", "StrictHostKeyChecking=accept-new",
+            "-p", str(self.port),
+        ]
+        if self.key:
+            opts += ["-i", self.key]
+        return ["ssh", *opts, f"{self.user}@{self.host}", remote_cmd]
+
+    def _ssh_run(self, remote_cmd: str, timeout: float = 45) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            self._ssh_argv(remote_cmd), capture_output=True, text=True, timeout=timeout
+        )
+
+    def check(self) -> TargetResult:
+        if not self._configured():
+            return TargetResult(False, "not configured — set host and user (top bar, Target → SSH…)")
+        try:
+            out = self._ssh_run(
+                "command -v latexmk >/dev/null 2>&1 && latexmk --version | head -n1"
+                " || echo WORKBENCH_NO_LATEXMK"
+            )
+        except FileNotFoundError:
+            return TargetResult(False, "ssh client not found on this host")
+        except subprocess.TimeoutExpired:
+            return TargetResult(
+                False, f"{self.user}@{self.host}:{self.port} did not respond in time (check host, port and key)"
+            )
+        except OSError as e:
+            return TargetResult(False, f"ssh failed: {e}")
+        if out.returncode != 0:
+            lines = (out.stderr or "").strip().splitlines()
+            return TargetResult(
+                False, f"ssh to {self.user}@{self.host} failed: {lines[-1] if lines else 'unknown error'}"
+            )
+        text = (out.stdout or "").strip()
+        if "WORKBENCH_NO_LATEXMK" in text or not text:
+            return TargetResult(False, f"latexmk not installed on {self.user}@{self.host}")
+        return TargetResult(True, text.splitlines()[0].strip())
+
+    def run_latexmk(
+        self, root: Path, main_file: str, build_dir: Path, force: bool = False
+    ) -> subprocess.Popen:
+        if not self._configured():
+            raise ApiError(400, "ssh target is not configured — set host and user (top bar, Target → SSH…)")
+        rd = shlex.quote(self.remote_dir)
+        # First contact: create the remote build dir and learn the absolute
+        # root (needed later to rewrite synctex Input paths).
+        try:
+            out = self._ssh_run(f"mkdir -p {rd}/build && cd {rd} && pwd")
+        except FileNotFoundError:
+            raise ApiError(501, "ssh client not found on this host")
+        except (subprocess.TimeoutExpired, OSError) as e:
+            raise ApiError(502, f"cannot reach {self.user}@{self.host}:{self.port} — {e}")
+        if out.returncode != 0 or not (out.stdout or "").strip():
+            err = (out.stderr or "").strip().splitlines()
+            raise ApiError(
+                502, f"ssh to {self.user}@{self.host} failed: {err[-1] if err else 'unknown error'}"
+            )
+        self.remote_abs = out.stdout.strip().splitlines()[0]
+
+        args = (["-f"] if force else []) + LATEXMK_ARGS
+        ssh_sync = " ".join(shlex.quote(c) for c in self._ssh_argv(f"cd {rd} && tar -xf -"))
+        ssh_compile = " ".join(
+            shlex.quote(c)
+            for c in self._ssh_argv(
+                f"cd {rd} && exec latexmk {' '.join(args)} -output-directory=build {shlex.quote(main_file)}"
+            )
+        )
+        script = (
+            "set -e\nset -o pipefail\n"
+            f'echo "[workbench] syncing {str(self.root)} -> {self.user}@{self.host}:{self.remote_dir}"\n'
+            f"tar -C {shlex.quote(str(root))} --exclude=.workbench -cf - . | {ssh_sync}\n"
+            f"{ssh_compile}\n"
+        )
+        return subprocess.Popen(
+            ["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        )
+
+    def collect_artifacts(self, root: Path, main_file: str, build_dir: Path) -> None:
+        """Pull PDF + synctex (+ log) back from the remote build dir."""
+        stem = Path(main_file).stem
+        base = self.remote_abs or self.remote_dir
+        for name in (f"{stem}.pdf", f"{stem}.synctex.gz", f"{stem}.log"):
+            try:
+                out = subprocess.run(
+                    self._ssh_argv(f"cat {shlex.quote(base + '/build/' + name)} 2>/dev/null"),
+                    capture_output=True, timeout=180,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+                continue
+            if out.returncode != 0 or not out.stdout:
+                continue
+            (build_dir / name).write_bytes(out.stdout)
+        self._rewrite_synctex(build_dir, stem)
+
+    def _rewrite_synctex(self, build_dir: Path, stem: str) -> None:
+        """Map remote absolute paths in the pulled synctex back to the local root."""
+        p = build_dir / f"{stem}.synctex.gz"
+        if not p.is_file() or not self.remote_abs:
+            return
+        raw = gzip.open(p, "rb").read().decode("utf-8", errors="replace")
+        remote_root = self.remote_abs.rstrip("/")
+        local_root = str(self.root).replace("\\", "/").rstrip("/")
+        if not remote_root or remote_root == local_root:
+            return
+        lines = [
+            ln.replace(remote_root, local_root)
+            if ln.startswith("Input:") and remote_root in ln
+            else ln
+            for ln in raw.splitlines()
+        ]
+        p.write_bytes(gzip.compress(("\n".join(lines) + "\n").encode("utf-8")))
+
+
 def get_target(name: str, root: Path) -> CompileTarget:
     """Resolve a target name (or 'auto') to an implementation."""
     if name == "local":
@@ -219,6 +367,10 @@ def get_target(name: str, root: Path) -> CompileTarget:
     if name == "wsl":
         d, _ = wsl_distro_from_root(root)
         return WslTarget(d)
+    if name == "ssh":
+        from . import state as _state  # local import: keep targets.py import-light
+        cfg = _state.load_project_config(root)
+        return SshTarget(cfg.get("ssh") or {}, root)
     if name == "auto":
         local = LocalTarget()
         r = local.check()

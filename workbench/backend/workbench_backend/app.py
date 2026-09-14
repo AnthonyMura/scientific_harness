@@ -199,6 +199,19 @@ def create_app(token: str) -> FastAPI:
             for k in ("main_file", "target", "auto_compile"):
                 if k in p:
                     cfg[k] = p[k]
+            ssh = p.get("ssh")
+            if isinstance(ssh, dict):
+                clean = {}
+                for k2 in ("host", "user", "key", "remote_dir"):
+                    v = ssh.get(k2)
+                    if isinstance(v, str) and v.strip():
+                        clean[k2] = v.strip()
+                port = ssh.get("port")
+                if isinstance(port, int) and not isinstance(port, bool) and 1 <= port <= 65535:
+                    clean["port"] = port
+                elif isinstance(port, str) and port.isdigit() and 1 <= int(port) <= 65535:
+                    clean["port"] = int(port)
+                cfg["ssh"] = clean
             state.save_project_config(root, cfg)
         return {"ok": True}
 

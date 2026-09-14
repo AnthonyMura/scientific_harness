@@ -66,6 +66,7 @@ def open_project(st, raw_path: str) -> dict:
         "main_file": cfg.get("main_file") or "main.tex",
         "target": cfg.get("target") or "auto",
         "auto_compile": bool(cfg.get("auto_compile", False)),
+        "ssh": cfg.get("ssh") or None,
     }
     st.set("current_project", proj["id"])
     recents = [r for r in st.get("recent_projects", []) if r.get("id") != proj["id"]]
@@ -112,6 +113,7 @@ def current(st):
             "main_file": cfg.get("main_file") or "main.tex",
             "target": cfg.get("target") or "auto",
             "auto_compile": bool(cfg.get("auto_compile", False)),
+            "ssh": cfg.get("ssh") or None,
         }
     st.set("current_project", None)
     return None

@@ -21,8 +21,9 @@ import shutil
 import subprocess
 import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 
-from . import tinytex
+from . import state, tinytex
 from .errors import ApiError
 from .jobs import JobRegistry
 from .targets import host_os, list_wsl_distros, wsl_distro_from_root
@@ -233,10 +234,43 @@ def probe_wsl(st) -> TargetStatus:
     return stt
 
 
+def probe_ssh(st) -> TargetStatus:
+    """Remote ssh target (M4): per-project config; probes reachability + remote TeX."""
+    stt = TargetStatus(name="ssh", available=True)
+    cur_root = st.get("current_project")
+    if not cur_root:
+        stt.available = False
+        stt.detail = "no project open — ssh settings are per project"
+        return stt
+    from .targets import SshTarget
+    cfg = state.load_project_config(Path(cur_root)).get("ssh") or {}
+    if not (cfg.get("host") and cfg.get("user")):
+        stt.available = False
+        stt.detail = "not configured — pick Target → SSH… in the top bar"
+        return stt
+    r = SshTarget(cfg, Path(cur_root)).check()
+    where = f"{cfg['user']}@{cfg['host']}"
+    if r.ok:
+        stt.tex_found = True
+        stt.version = r.detail
+        stt.detail = f"TeX found on {where} — {r.detail}"
+    else:
+        stt.detail = f"{where}: {r.detail}"
+    stt.install_hint = (
+        "The remote machine needs TeX Live + latexmk, e.g. "
+        "`sudo apt-get install texlive-latex-base texlive-latex-recommended "
+        "texlive-latex-extra texlive-fonts-recommended texlive-fonts-extra latexmk` "
+        "(or a tlmgr install). The app cannot install on the remote for you — "
+        "set it up there, then re-probe."
+    )
+    return stt
+
+
 def status(st) -> list[dict]:
     out = [probe_tinytex(), probe_local()]
     if host_os() == "windows":
         out.append(probe_wsl(st))
+    out.append(probe_ssh(st))
     return out
 
 
