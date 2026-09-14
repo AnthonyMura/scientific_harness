@@ -1,39 +1,50 @@
 // Module workbench shell: activity bar + a VSCode-style tree of splittable
-// groups. Any group can be split horizontally or vertically, any tab can be
-// dragged into any group, and dropping near a group's bottom/right edge
-// creates a new pane there (the dragged tab lands in the new pane).
+// groups. Dragging a tab — or an activity-bar module — live-reflows the split
+// ratios so the hovered pane grows and its neighbours step aside; dropping near
+// any of a pane's four edges creates a new pane on that side, and dropping
+// anywhere else inserts into the pane (empty panes light up as drop targets).
+// A quiet quote from Newton sits behind every pane.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { AppCtx } from "../modules/ctx";
-import { FILE_DRAG_MIME, TAB_DRAG_MIME } from "../modules/layout";
+import { FILE_DRAG_MIME, MODULE_DRAG_MIME, TAB_DRAG_MIME, pathToGroup } from "../modules/layout";
 import type { LayoutAction, LayoutState, Tab } from "../modules/layout";
 import { MODULE_DEFS, MODULE_ORDER } from "../modules/defs";
 import { MODULES } from "../modules/registry";
 import { DotsIcon, ExpandIcon, SplitDownIcon, SplitRightIcon, XIcon } from "../icons";
 
-interface DragInfo {
-  tabId: string;
-  fromGroup: string;
-}
+type DragState =
+  | { kind: "tab"; tabId: string; fromGroup: string }
+  | { kind: "module"; moduleId: string };
 
 type Over =
   | { groupId: string; mode: "insert"; index: number }
-  | { groupId: string; mode: "split"; dir: "h" | "v" };
+  | { groupId: string; mode: "split"; dir: "h" | "v"; side: "before" | "after" };
 
 interface WB {
   layout: LayoutState;
   dispatch: React.Dispatch<LayoutAction>;
   ctx: AppCtx;
-  drag: DragInfo | null;
+  drag: DragState | null;
   over: Over | null;
-  setDrag: (d: DragInfo | null) => void;
+  /** Preview ratios for the splits on the hovered pane's path (live reflow). */
+  preview: Record<string, number> | null;
+  setDrag: (d: DragState | null) => void;
   setOver: (o: Over | null) => void;
 }
 
 const Ctx = createContext<WB>(null as unknown as WB);
 const useWB = () => useContext(Ctx);
 
-/** px from a group's bottom/right edge that triggers "split" instead of insert. */
+/** px from a pane edge that triggers "split" instead of insert. */
 const EDGE = 26;
+/** Share of the parent split the hovered pane grows to while dragging. */
+const GROW = 0.62;
+
+function dragName(drag: DragState | null, layout: LayoutState): string {
+  if (!drag) return "a module";
+  if (drag.kind === "tab") return layout.tabs[drag.tabId]?.title ?? "this tab";
+  return MODULE_DEFS[drag.moduleId]?.title ?? "this module";
+}
 
 function groupOfTab(layout: LayoutState, tabId: string): string | null {
   for (const n of Object.values(layout.nodes)) if (n.kind === "group" && n.tabs.includes(tabId)) return n.id;
@@ -49,7 +60,7 @@ export default function Workbench({
   dispatch: React.Dispatch<LayoutAction>;
   ctx: AppCtx;
 }) {
-  const [drag, setDrag] = useState<DragInfo | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
   const [over, setOver] = useState<Over | null>(null);
 
   // Ctrl+W closes the focused pane's active tab; Esc exits fullscreen.
@@ -71,9 +82,23 @@ export default function Workbench({
     return () => window.removeEventListener("keydown", onKey);
   }, [layout, dispatch]);
 
+  // Live reflow: while a drag hovers a pane, grow the hovered branch to GROW
+  // at every split on its path so neighbours step aside and make room.
+  const preview = useMemo(() => {
+    if (!drag || !over) return null;
+    const rootId = layout.fullscreen ?? layout.rootId;
+    const chain = pathToGroup(layout.nodes, rootId, over.groupId);
+    if (!chain) return null;
+    const m: Record<string, number> = {};
+    for (const { split, which } of chain) {
+      m[split.id] = which === "a" ? Math.max(split.ratio, GROW) : Math.min(split.ratio, 1 - GROW);
+    }
+    return m;
+  }, [drag, over, layout]);
+
   const wb = useMemo<WB>(
-    () => ({ layout, dispatch, ctx, drag, over, setDrag, setOver }),
-    [layout, dispatch, ctx, drag, over],
+    () => ({ layout, dispatch, ctx, drag, over, preview, setDrag, setOver }),
+    [layout, dispatch, ctx, drag, over, preview],
   );
   const rootId = layout.fullscreen ?? layout.rootId;
   if (!layout.nodes[rootId]) return null;
@@ -82,7 +107,13 @@ export default function Workbench({
     <Ctx.Provider value={wb}>
       <div className="wb">
         <ActivityBar />
-        <div className="wb-main">
+        <div className={"wb-main" + (drag ? " dragging" : "")}>
+          <div className="wb-quote" aria-hidden="true">
+            <blockquote>
+              If I have seen further it is by standing on the shoulders of Giants.
+              <cite>Isaac Newton · letter to Robert Hooke, 1675</cite>
+            </blockquote>
+          </div>
           <NodeView id={rootId} />
           {layout.fullscreen && (
             <button className="fs-exit" title="Exit fullscreen (Esc)" onClick={() => dispatch({ type: "fullscreen", nodeId: null })}>
@@ -96,7 +127,7 @@ export default function Workbench({
 }
 
 function ActivityBar() {
-  const { layout, dispatch, ctx } = useWB();
+  const { layout, dispatch, ctx, setDrag } = useWB();
   const openModules = useMemo(() => new Set(Object.values(layout.tabs).map((t) => t.moduleId)), [layout.tabs]);
   const fg = layout.focusedGroup ? layout.nodes[layout.focusedGroup] : null;
   const focusedTab = fg && fg.kind === "group" ? fg.active : null;
@@ -111,7 +142,14 @@ function ActivityBar() {
           <button
             key={id}
             className={"ab-item" + (busy ? " busy" : "") + (focusedModule === id ? " active" : "")}
-            title={`${def.title} — ${openModules.has(id) ? "focus its pane" : "open in its home pane"}`}
+            title={`${def.title} — ${openModules.has(id) ? "focus its pane" : "open in its home pane"} · drag into any pane`}
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData(MODULE_DRAG_MIME, id);
+              e.dataTransfer.effectAllowed = "move";
+              setDrag({ kind: "module", moduleId: id });
+            }}
+            onDragEnd={() => setDrag(null)}
             onClick={() => dispatch({ type: "open", moduleId: id })}
           >
             {openModules.has(id) && <span className="ab-dot" />}
@@ -124,14 +162,15 @@ function ActivityBar() {
 }
 
 function NodeView({ id }: { id: string }) {
-  const { layout } = useWB();
+  const { layout, preview } = useWB();
   const node = layout.nodes[id];
   if (!node) return null;
   if (node.kind === "group") return <GroupView id={id} />;
   const h = node.dir === "h";
+  const ratio = preview?.[node.id] ?? node.ratio;
   return (
     <div className={"split " + (h ? "h" : "v")}>
-      <div className="split-child" style={h ? { width: `${node.ratio * 100}%` } : { height: `${node.ratio * 100}%` }}>
+      <div className="split-child" style={h ? { width: `${ratio * 100}%` } : { height: `${ratio * 100}%` }}>
         <NodeView id={node.a} />
       </div>
       <Divider id={node.id} dir={node.dir} />
@@ -182,34 +221,49 @@ function GroupView({ id }: { id: string }) {
   const tabs = group.tabs.map((tid) => layout.tabs[tid]).filter((t): t is Tab => !!t);
   const activeTab = group.active ? layout.tabs[group.active] : null;
   const entry = activeTab ? MODULES[activeTab.moduleId] : null;
+  const insertAt = over?.groupId === id && over.mode === "insert" ? over.index : null;
 
   const onDragOver = (e: React.DragEvent) => {
-    const tabDrag = drag !== null || e.dataTransfer.types.includes(TAB_DRAG_MIME);
+    const tabDrag = drag?.kind === "tab" || e.dataTransfer.types.includes(TAB_DRAG_MIME);
+    const moduleDrag = drag?.kind === "module" || e.dataTransfer.types.includes(MODULE_DRAG_MIME);
     const fileDrag = e.dataTransfer.types.includes(FILE_DRAG_MIME);
-    if (!tabDrag && !fileDrag) return;
+    if (!tabDrag && !moduleDrag && !fileDrag) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = fileDrag ? "copy" : "move";
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
     let next: Over;
-    if (tabDrag && e.clientY >= r.bottom - EDGE) next = { groupId: id, mode: "split", dir: "v" };
-    else if (tabDrag && e.clientX >= r.right - EDGE) next = { groupId: id, mode: "split", dir: "h" };
-    else {
-      // insert index from the pointer position over the tab strip
-      let index = tabs.length;
-      const strip = el.querySelector<HTMLElement>(".tabstrip");
-      if (strip) {
-        const tr = strip.getBoundingClientRect();
-        if (e.clientY <= tr.bottom) {
-          index = 0;
-          for (const t of Array.from(strip.querySelectorAll<HTMLElement>(".tab"))) {
-            const br = t.getBoundingClientRect();
-            if (e.clientX > br.left + br.width / 2) index += 1;
+    if (tabDrag || moduleDrag) {
+      // Nearest pane edge within EDGE px → split on that side.
+      const cand: { dist: number; o: Over }[] = [
+        { dist: e.clientY - r.top, o: { groupId: id, mode: "split", dir: "v", side: "before" } },
+        { dist: r.bottom - e.clientY, o: { groupId: id, mode: "split", dir: "v", side: "after" } },
+        { dist: e.clientX - r.left, o: { groupId: id, mode: "split", dir: "h", side: "before" } },
+        { dist: r.right - e.clientX, o: { groupId: id, mode: "split", dir: "h", side: "after" } },
+      ];
+      const edges = cand.filter((c) => c.dist >= 0 && c.dist <= EDGE);
+      if (edges.length) {
+        edges.sort((a, b) => a.dist - b.dist);
+        next = edges[0].o;
+      } else {
+        // insert index from the pointer position over the tab strip
+        let index = tabs.length;
+        const strip = el.querySelector<HTMLElement>(".tabstrip");
+        if (strip) {
+          const tr = strip.getBoundingClientRect();
+          if (e.clientY <= tr.bottom) {
+            index = 0;
+            for (const t of Array.from(strip.querySelectorAll<HTMLElement>(".tab"))) {
+              const br = t.getBoundingClientRect();
+              if (e.clientX > br.left + br.width / 2) index += 1;
+            }
           }
         }
+        next = { groupId: id, mode: "insert", index };
       }
-      next = { groupId: id, mode: "insert", index };
+    } else {
+      next = { groupId: id, mode: "insert", index: tabs.length };
     }
     if (JSON.stringify(next) !== JSON.stringify(over)) setOver(next);
   };
@@ -223,10 +277,20 @@ function GroupView({ id }: { id: string }) {
       setDrag(null);
       return;
     }
-    if (!drag) return;
-    const o = over;
-    if (o && o.groupId === id && o.mode === "split") dispatch({ type: "split", groupId: id, dir: o.dir, withTabId: drag.tabId });
-    else dispatch({ type: "move", tabId: drag.tabId, groupId: id, index: o && o.groupId === id && o.mode === "insert" ? o.index : undefined });
+    const o = over && over.groupId === id ? over : null;
+    if (drag?.kind === "module") {
+      if (o?.mode === "split") {
+        dispatch({ type: "split", groupId: id, dir: o.dir, side: o.side, withModuleId: drag.moduleId });
+      } else {
+        const def = MODULE_DEFS[drag.moduleId];
+        const tid = def ? def.tabId() : null;
+        if (tid && layout.tabs[tid]) dispatch({ type: "move", tabId: tid, groupId: id });
+        else dispatch({ type: "open", moduleId: drag.moduleId, groupId: id });
+      }
+    } else if (drag?.kind === "tab") {
+      if (o?.mode === "split") dispatch({ type: "split", groupId: id, dir: o.dir, side: o.side, withTabId: drag.tabId });
+      else dispatch({ type: "move", tabId: drag.tabId, groupId: id, index: o?.mode === "insert" ? o.index : undefined });
+    }
     setOver(null);
     setDrag(null);
   };
@@ -238,16 +302,37 @@ function GroupView({ id }: { id: string }) {
     setOver(null);
   };
 
-  const splitOver = over?.groupId === id && over.mode === "split" ? over.dir : null;
+  const splitOver = over?.groupId === id && over.mode === "split" ? over : null;
+  const edgeClass = splitOver
+    ? splitOver.dir === "v"
+      ? splitOver.side === "before"
+        ? "top"
+        : "bottom"
+      : splitOver.side === "before"
+        ? "left"
+        : "right"
+    : null;
+  const dropTarget = tabs.length === 0 && insertAt !== null;
 
   return (
-    <div className="group" ref={ref} onDragOver={onDragOver} onDrop={onDrop} onDragLeave={onDragLeave}>
+    <div
+      className={"group" + (tabs.length === 0 ? " empty" : "") + (dropTarget ? " drop-target" : "")}
+      ref={ref}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragLeave={onDragLeave}
+    >
       <div className="tabstrip group-head">
-        {tabs.map((t, i) => (
-          <TabView key={t.id} tab={t} groupId={id} index={i} onMenu={(x, y) => setMenu({ x, y, tabId: t.id })} />
-        ))}
+        {tabs.map((t, i) => {
+          let dropAt: "before" | "after" | null = null;
+          if (insertAt !== null) {
+            if (insertAt === i) dropAt = "before";
+            else if (insertAt === tabs.length && i === tabs.length - 1) dropAt = "after";
+          }
+          return <TabView key={t.id} tab={t} groupId={id} index={i} dropAt={dropAt} onMenu={(x, y) => setMenu({ x, y, tabId: t.id })} />;
+        })}
         <span className="head-spacer" />
-        {tabs.length === 0 && (
+        {tabs.length === 0 && id !== layout.rootId && (
           <button className="tab-dots head-remove" title="Remove this empty pane" onClick={() => dispatch({ type: "removeGroup", groupId: id })}>
             <XIcon size={13} />
           </button>
@@ -270,10 +355,12 @@ function GroupView({ id }: { id: string }) {
       <div className="group-content">
         {activeTab && entry ? (
           entry.render(ctx, activeTab)
+        ) : dropTarget ? (
+          <div className="area-empty drop-target-area">Drop “{dragName(drag, layout)}” here</div>
         ) : (
           <div className="area-empty">Drag a module here — or use the split buttons above.</div>
         )}
-        {splitOver && <div className={"edge-line " + splitOver} />}
+        {edgeClass && <div className={"edge-line " + edgeClass} />}
       </div>
       {menu && <TabMenu menu={menu} onClose={() => setMenu(null)} />}
     </div>
@@ -284,30 +371,36 @@ function TabView({
   tab,
   groupId,
   index,
+  dropAt,
   onMenu,
 }: {
   tab: Tab;
   groupId: string;
   index: number;
+  dropAt: "before" | "after" | null;
   onMenu: (x: number, y: number) => void;
 }) {
-  const { layout, dispatch, over, setDrag } = useWB();
+  const { layout, dispatch, setDrag, setOver } = useWB();
   const def = MODULE_DEFS[tab.moduleId];
   const Icon = MODULES[tab.moduleId].icon;
   const group = layout.nodes[groupId];
   const active = group?.kind === "group" && group.active === tab.id;
-  const dropBefore = over?.mode === "insert" && over.groupId === groupId && over.index === index;
   return (
     <div
-      className={"tab" + (active ? " active" : "") + (dropBefore ? " drop-before" : "")}
+      className={
+        "tab" + (active ? " active" : "") + (dropAt === "before" ? " drop-before" : "") + (dropAt === "after" ? " drop-after" : "")
+      }
       draggable
       title={`${def.title} — click to focus, drag to move (near a pane edge it splits)`}
       onDragStart={(e) => {
         e.dataTransfer.setData(TAB_DRAG_MIME, tab.id);
         e.dataTransfer.effectAllowed = "move";
-        setDrag({ tabId: tab.id, fromGroup: groupId });
+        setDrag({ kind: "tab", tabId: tab.id, fromGroup: groupId });
       }}
-      onDragEnd={() => setDrag(null)}
+      onDragEnd={() => {
+        setDrag(null);
+        setOver(null);
+      }}
       onClick={() => dispatch({ type: "activate", groupId, tabId: tab.id })}
     >
       <span className="tab-icon">
@@ -358,6 +451,10 @@ function TabMenu({ menu, onClose }: { menu: { x: number; y: number; tabId: strin
           {layout.fullscreen === groupId ? "Exit fullscreen" : "Fullscreen pane"}
         </button>
       )}
+      <div className="menu-sep" />
+      <button className="menu-item" onClick={() => dispatch({ type: "resetLayout" })}>
+        Reset layout to default
+      </button>
     </div>
   );
 }
