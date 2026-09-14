@@ -107,6 +107,9 @@ export default function App() {
           if (snap.kind === "compile") {
             compilingRef.current = false;
             if (snap.artifacts.pdf) setPdfVersion((v) => v + 1);
+            // A failed compile keeps the old PDF — bring the log forward so the
+            // reason is visible instead of hidden behind the PDF tab.
+            if (snap.status !== "done") dispatch({ type: "open", moduleId: "log" });
             // A save arrived while this compile ran: run it once more.
             if (autoPendingRef.current) {
               autoPendingRef.current = false;
@@ -339,6 +342,18 @@ export default function App() {
   }, [layout]);
 
   const onOpenFile = useCallback((path: string) => {
+    // Reuse the focused pane's empty editor tab instead of stacking a second one.
+    const st = layoutRef.current;
+    if (!st.tabs["editor:" + path]) {
+      const g = st.focusedGroup ? st.nodes[st.focusedGroup] : null;
+      if (g?.kind === "group" && g.active) {
+        const t = st.tabs[g.active];
+        if (t?.moduleId === "editor" && !t.params?.filePath) {
+          dispatch({ type: "attachFile", tabId: t.id, filePath: path });
+          return;
+        }
+      }
+    }
     dispatch({ type: "open", moduleId: "editor", params: { filePath: path } });
   }, []);
 
@@ -354,6 +369,10 @@ export default function App() {
 
   const onShowInstall = useCallback(() => {
     dispatch({ type: "open", moduleId: "install" });
+  }, []);
+
+  const onShowLog = useCallback(() => {
+    dispatch({ type: "open", moduleId: "log" });
   }, []);
 
   const onPathsGone = useCallback((prefixes: string[]) => {
@@ -403,6 +422,7 @@ export default function App() {
       onTarget: (t) => void setTarget(t),
       onSaveSsh: saveSsh,
       onShowInstall,
+      onShowLog,
       pdfVersion,
       job,
       onOpenFile,
@@ -416,7 +436,7 @@ export default function App() {
       syncToEditor,
       onFileSaved,
     }),
-    [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall,
+    [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
      setAutoCompile, setTarget, saveSsh,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
