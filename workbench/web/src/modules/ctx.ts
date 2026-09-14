@@ -17,6 +17,8 @@ export interface AppCtx {
   projectRoot: string | null;
   /** File path of the active center editor tab (for explorer highlighting). */
   activeFile: string | null;
+  /** True when the focused pane's active tab is an editor tab — a single click in the Explorer opens files. */
+  editorFocused: boolean;
   pdfVersion: number;
   job: ActiveJob | null;
   onOpenFile: (path: string) => void;

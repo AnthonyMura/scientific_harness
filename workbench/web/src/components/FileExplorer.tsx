@@ -252,7 +252,11 @@ export default function FileExplorer({ ctx }: Props) {
 
   function rowClick(e: FileEntry) {
     setSelected(e.path);
-    if (e.is_dir) toggle(e.path); // single click: select + expand/collapse folders
+    if (e.is_dir) {
+      toggle(e.path); // single click: select + expand/collapse folders
+    } else if (ctx.editorFocused) {
+      ctx.onOpenFile(e.path); // editor activated: a single click opens the file
+    }
   }
 
   if (!ctx.projectOpen) {

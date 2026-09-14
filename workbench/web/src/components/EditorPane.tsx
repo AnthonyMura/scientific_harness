@@ -191,7 +191,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
       {filePath ? (
         <div className="editor-host" ref={hostRef} />
       ) : (
-        <div className="pane-empty">No file selected — pick one in the Explorer, or open a new project.</div>
+        <div className="pane-empty">No file selected — click a file in the Explorer, or open a new project.</div>
       )}
       {gearOpen && (
         <SettingsMenu

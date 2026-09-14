@@ -321,6 +321,15 @@ export default function App() {
     return t.params?.filePath ? String(t.params.filePath) : null;
   }, [layout]);
 
+  /** The focused pane's active tab is an editor tab (the "activated editor"). */
+  const editorFocused = useMemo(() => {
+    const fg = layout.focusedGroup;
+    if (!fg) return false;
+    const g = layout.nodes[fg];
+    if (!g || g.kind !== "group" || !g.active) return false;
+    return layout.tabs[g.active]?.moduleId === "editor";
+  }, [layout]);
+
   const onOpenFile = useCallback((path: string) => {
     dispatch({ type: "open", moduleId: "editor", params: { filePath: path } });
   }, []);
@@ -358,6 +367,7 @@ export default function App() {
       projectOpen: !!project,
       projectRoot: project?.root ?? null,
       activeFile,
+      editorFocused,
       pdfVersion,
       job,
       onOpenFile,
@@ -371,7 +381,7 @@ export default function App() {
       syncToEditor,
       onFileSaved,
     }),
-    [project, activeFile, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
+    [project, activeFile, editorFocused, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
   );
 
