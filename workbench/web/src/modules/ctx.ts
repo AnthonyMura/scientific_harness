@@ -37,6 +37,8 @@ export interface AppCtx {
   onSaveSsh: (cfg: SshConfig) => void;
   /** Open the Install TeX pane. */
   onShowInstall: () => void;
+  /** Open/focus the Run Log pane (compile failures). */
+  onShowLog: () => void;
   pdfVersion: number;
   job: ActiveJob | null;
   onOpenFile: (path: string) => void;

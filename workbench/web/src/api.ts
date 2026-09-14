@@ -87,6 +87,7 @@ export const api = {
     const c = apiConfig();
     const res = await fetch(`${c.baseUrl}/api/files/raw?path=${encodeURIComponent(path)}`, {
       headers: { "X-Workbench-Token": c.token },
+      cache: "no-store", // artifacts change on every compile — never serve a cached copy
     });
     if (!res.ok) return null;
     return res.blob();
@@ -97,6 +98,7 @@ export const api = {
     const c = apiConfig();
     const res = await fetch(`${c.baseUrl}/api/files/raw-file?path=${encodeURIComponent(path)}`, {
       headers: { "X-Workbench-Token": c.token },
+      cache: "no-store", // artifacts change on every compile — never serve a cached copy
     });
     if (!res.ok) return null;
     return res.blob();
@@ -116,7 +118,7 @@ export const api = {
     const c = apiConfig();
     const res = await fetch(
       `${c.baseUrl}/api/artifacts/pdf?file=${encodeURIComponent(file)}`,
-      { headers: { "X-Workbench-Token": c.token } },
+      { headers: { "X-Workbench-Token": c.token }, cache: "no-store" }, // never serve a cached copy
     );
     if (!res.ok) throw new Error(`no PDF artifact yet (HTTP ${res.status})`);
     return res.blob();
@@ -127,6 +129,7 @@ export const api = {
     const c = apiConfig();
     const res = await fetch(`${c.baseUrl}/api/artifacts/synctex?file=${encodeURIComponent(file)}`, {
       headers: { "X-Workbench-Token": c.token },
+      cache: "no-store", // the map changes on every compile — never serve a cached copy
     });
     if (!res.ok) return null; // no synctex artifact yet — sync stays disabled
     return res.text();
