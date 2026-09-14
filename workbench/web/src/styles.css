@@ -186,6 +186,23 @@ button.danger:hover:not(:disabled) { background: rgba(123, 22, 18, 0.5); color: 
 button.active { color: var(--gold); border-color: rgba(179, 143, 111, 0.5); }
 button.mini { padding: 3px 9px; font-size: 10px; }
 
+.auto-compile {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.auto-compile input { margin: 0; accent-color: var(--brick); cursor: pointer; }
+.auto-compile:hover { color: var(--pearl); }
+
 select {
   font-family: var(--font-ui);
   font-size: 12px;

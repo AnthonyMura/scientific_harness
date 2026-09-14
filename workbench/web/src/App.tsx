@@ -28,6 +28,10 @@ export default function App() {
   const offsetRef = useRef(0);
   const finishedRef = useRef<string | null>(null);
   const activeJobIdRef = useRef<string | null>(null);
+  // Auto-compile on save (M3): compilingRef guards the async start gap;
+  // autoPendingRef coalesces saves that arrive while a compile is running.
+  const compilingRef = useRef(false);
+  const autoPendingRef = useRef(false);
 
   const [layout, dispatch] = useReducer(layoutReducer, undefined, () => loadPersistedLayout().state);
   const layoutRef = useRef(layout);
@@ -89,7 +93,15 @@ export default function App() {
         offsetRef.current = snap.total_lines;
         if (snap.status !== "running" && finishedRef.current !== jobId) {
           finishedRef.current = jobId;
-          if (snap.kind === "compile" && snap.artifacts.pdf) setPdfVersion((v) => v + 1);
+          if (snap.kind === "compile") {
+            compilingRef.current = false;
+            if (snap.artifacts.pdf) setPdfVersion((v) => v + 1);
+            // A save arrived while this compile ran: run it once more.
+            if (autoPendingRef.current) {
+              autoPendingRef.current = false;
+              void compileRef.current(true);
+            }
+          }
         }
         setJob((prev) =>
           prev && prev.id === jobId
@@ -184,15 +196,50 @@ export default function App() {
     setJob({ id, kind, label, status: "running", exit_code: null, logLines: [], errors: [], artifacts: {} });
   };
 
-  const compile = async () => {
-    if (!project) return;
+  const compile = async (auto = false) => {
+    if (!project || compilingRef.current) return;
+    compilingRef.current = true;
     try {
       const r = await api.startCompile(project.main_file, project.target);
-      beginJob(r.job_id, "compile", `compiling ${project.name}`);
+      beginJob(
+        r.job_id,
+        "compile",
+        auto ? `auto-compiling ${project.name} after save` : `compiling ${project.name}`,
+      );
     } catch (e) {
+      compilingRef.current = false; // start failed — allow a retry
       setBanner(errMsg(e));
     }
   };
+  const compileRef = useRef<(auto?: boolean) => Promise<void>>(() => Promise.resolve());
+  compileRef.current = compile;
+
+  /** A .tex file was saved: kick off (or queue) an auto-compile. */
+  const onFileSaved = useCallback(
+    (path: string) => {
+      if (!project || !path.endsWith(".tex") || !project.auto_compile) return;
+      const j = jobRef.current;
+      if (compilingRef.current || (j && j.kind === "compile" && j.status === "running")) {
+        autoPendingRef.current = true; // coalesce: one follow-up run on finish
+        return;
+      }
+      void compile(true);
+    },
+    [project, compile],
+  );
+
+  const setAutoCompile = useCallback(
+    async (on: boolean) => {
+      if (!project) return;
+      try {
+        await api.setConfig({ project: { auto_compile: on } });
+        setProject((p) => (p ? { ...p, auto_compile: on } : p));
+      } catch (e) {
+        setBanner(errMsg(e));
+      }
+    },
+    [project],
+  );
 
   const startInstall = useCallback(async (target: string, distro?: string) => {
     try {
@@ -272,9 +319,10 @@ export default function App() {
       editorGoto,
       syncToPdf,
       syncToEditor,
+      onFileSaved,
     }),
     [project, activeFile, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
-     pdfSync, editorGoto, syncToPdf, syncToEditor],
+     pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
   );
 
   return (
@@ -284,6 +332,8 @@ export default function App() {
         recent={recent}
         devMode={devMode}
         jobRunning={!!job && job.status === "running"}
+        autoCompile={!!project?.auto_compile}
+        onAutoCompile={(on) => void setAutoCompile(on)}
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}

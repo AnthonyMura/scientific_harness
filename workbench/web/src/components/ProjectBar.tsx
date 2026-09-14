@@ -5,6 +5,8 @@ interface Props {
   recent: Project[];
   devMode: boolean;
   jobRunning: boolean;
+  autoCompile: boolean;
+  onAutoCompile: (on: boolean) => void;
   onOpenFolder: () => void;
   onNewProject: () => void;
   onPickRecent: (p: Project) => void;
@@ -15,7 +17,8 @@ interface Props {
 }
 
 export default function ProjectBar({
-  project, recent, devMode, jobRunning, onOpenFolder, onNewProject, onPickRecent,
+  project, recent, devMode, jobRunning, autoCompile, onAutoCompile,
+  onOpenFolder, onNewProject, onPickRecent,
   onCompile, onCancelJob, showInstall, onToggleInstall,
 }: Props) {
   return (
@@ -41,6 +44,12 @@ export default function ProjectBar({
       )}
       <span className="spacer" />
       {devMode && <span className="badge">browser dev mode</span>}
+      {project && (
+        <label className="auto-compile" title="Compile automatically after saving a .tex file">
+          <input type="checkbox" checked={autoCompile} onChange={(e) => onAutoCompile(e.target.checked)} />
+          Auto-compile
+        </label>
+      )}
       <button onClick={onToggleInstall} className={showInstall ? "active" : ""}>
         Install TeX
       </button>
