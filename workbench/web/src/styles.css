@@ -1043,3 +1043,42 @@ code {
   color: var(--text-3);
 }
 .ssh-form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* --- compile picker in the editor pane (LaTeX files only) --------------- */
+.compile-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.compile-pick select { padding: 4px 6px; font-size: 11px; max-width: 220px; }
+
+/* --- project settings menu (top bar gear, Overleaf-style) --------------- */
+.proj-settings { width: 320px; }
+.set-row.wrap { flex-wrap: wrap; row-gap: 6px; }
+.proj-main-pick { width: 180px; font-size: 11px; padding: 4px 6px; text-transform: none; }
+.ssh-inline {
+  border-top: 1px solid var(--hairline);
+  margin: 8px 10px 10px;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ssh-inline h4 { margin: 0 0 2px; font-size: 12px; color: var(--text-1); }
+.ssh-inline label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+.ssh-inline input { width: 150px; padding: 4px 6px; font-size: 11px; }
+.ssh-inline .ssh-form-note { margin: 0; }
