@@ -345,6 +345,9 @@ input::placeholder { color: var(--text-3); }
 /* Cursor: brick from the palette. Shape and motion are editor settings —
    EditorPane sets data-cursor / data-smooth on .editor-pane, applied live. */
 .cm-cursor { border-left-color: var(--brick); }
+/* Line cursor width — sub-setting of Cursor type = line; EditorPane sets
+   --cm-cursor-w live. Scoped so block/underline shapes keep their 1ch box. */
+.editor-pane[data-cursor="line"] .cm-cursor { border-left-width: var(--cm-cursor-w, 1.2px); }
 .editor-pane[data-cursor="block"] .cm-cursor {
   border-left-color: transparent;
   background: rgba(123, 22, 18, 0.55); /* brick at 55% — the character stays readable */

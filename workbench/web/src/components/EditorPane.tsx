@@ -24,10 +24,21 @@ export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "tabSize", label: "Tab size", min: 2, max: 8, step: 2, unit: "sp" },
   { kind: "toggle", key: "wrap", label: "Word wrap" },
   { kind: "select", key: "cursorType", label: "Cursor type", options: ["line", "block", "underline"] },
+  {
+    kind: "number",
+    key: "cursorLineWidth",
+    label: "Cursor line width",
+    min: 1,
+    max: 6,
+    step: 0.2,
+    unit: "px",
+    visibleWhen: { key: "cursorType", value: "line" },
+  },
   { kind: "toggle", key: "smoothCursor", label: "Smooth cursor motion" },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = {
-  fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line", smoothCursor: true,
+  fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line",
+  cursorLineWidth: 1.2, smoothCursor: true,
 };
 
 /** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX;
@@ -182,6 +193,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const lh = typeof settings.lineHeight === "number" ? settings.lineHeight : 1.7;
   // Cursor shape + smooth motion apply live via data attributes (no view recreation).
   const cursorType = typeof settings.cursorType === "string" ? settings.cursorType : "line";
+  const cursorLineWidth = typeof settings.cursorLineWidth === "number" ? settings.cursorLineWidth : 1.2;
   const smoothCursor = !!settings.smoothCursor;
 
   return (
@@ -189,7 +201,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
       className="editor-pane"
       data-cursor={cursorType}
       data-smooth={smoothCursor ? "on" : "off"}
-      style={{ "--cm-fs": `${fs}px`, "--cm-lh": String(lh) } as React.CSSProperties}
+      style={
+        { "--cm-fs": `${fs}px`, "--cm-lh": String(lh), "--cm-cursor-w": `${cursorLineWidth}px` } as React.CSSProperties
+      }
     >
       <div className="pane-header">
         <span>{filePath ?? "no file selected"}</span>
