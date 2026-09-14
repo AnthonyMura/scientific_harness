@@ -1,9 +1,11 @@
-// PDF preview module ("latex compilation" output): renders main.pdf with
-// pdf.js; zoom is a module setting adjustable from the header. Pages keep
-// their natural size and the host scrolls in both directions; a transparent
-// text layer over each canvas makes the text selectable. SyncTeX (M3): a click
-// in the editor scrolls here to the matching line (forward search), and a
-// click on a page jumps back to the source line (inverse search).
+// PDF module: reads any project PDF in a single pane. Two modes —
+// "compiled output" (main.pdf from LaTeX, with SyncTeX and the compile
+// controls) and a static file opened from the Explorer (read-only, no sync).
+// Zoom is a module setting adjustable from the header. Pages keep their
+// natural size and the host scrolls in both directions; a transparent text
+// layer over each canvas makes the text selectable. SyncTeX (M3): a click in
+// the editor scrolls here to the matching line (forward search), and a click
+// on a page jumps back to the source line (inverse search).
 import React, { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -11,6 +13,8 @@ import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
 import { forwardLookup, parseSynctex, reverseLookup } from "../modules/synctex";
 import type { SynctexData } from "../modules/synctex";
+import type { SshConfig } from "../types";
+import { COMPILE_TARGETS, hasWslTarget, installHint, needsInstall, targetTooltip } from "../modules/targets-ui";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
@@ -27,9 +31,19 @@ interface Props {
   ctx: AppCtx;
 }
 
+function baseName(p: string): string {
+  const i = p.lastIndexOf("/");
+  return i === -1 ? p : p.slice(i + 1);
+}
+
 export default function PdfViewer({ ctx }: Props) {
   const [settings, setSetting] = useModuleSettings("pdf", PDF_DEFAULTS);
   const zoom = typeof settings.zoom === "number" ? settings.zoom : 125;
+  /** null → compiled main.pdf output; otherwise a static project file. */
+  const pdfFile = ctx.pdfFile;
+  // Compile ticks only matter for the compiled-output view; a static file is
+  // immutable from the app's point of view.
+  const outputTick = pdfFile ? 0 : ctx.pdfVersion;
   const hostRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<{ destroy: () => Promise<void> } | null>(null);
   const synctexRef = useRef<SynctexData | null>(null);
@@ -38,10 +52,27 @@ export default function PdfViewer({ ctx }: Props) {
   const [status, setStatus] = useState<string>("");
   const [synctexTick, setSynctexTick] = useState(0);
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
+  const [showSsh, setShowSsh] = useState(false);
+  const [draft, setDraft] = useState<SshConfig>({});
+  // pdfVersion when the static file was opened — a newer compile gets a chip.
+  const versionAtOpenRef = useRef<number | null>(null);
 
-  // SyncTeX map for the current PDF (M3). Missing artifact → sync disabled.
+  // Mode switch: drop any stale SyncTeX map (re-fetched in compiled-output
+  // mode) and remember which compile produced what we are looking at.
   useEffect(() => {
-    if (!ctx.projectOpen) return;
+    if (pdfFile) {
+      versionAtOpenRef.current = ctx.pdfVersion;
+    } else {
+      versionAtOpenRef.current = null;
+    }
+    synctexRef.current = null;
+    setSynctexTick((t) => t + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfFile, ctx.projectRoot]);
+
+  // SyncTeX map for the compiled output (M3). Static files have no sync map.
+  useEffect(() => {
+    if (!ctx.projectOpen || pdfFile) return;
     let cancelled = false;
     (async () => {
       try {
@@ -56,7 +87,7 @@ export default function PdfViewer({ ctx }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion]);
+  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, pdfFile]);
 
   useEffect(() => {
     if (!ctx.projectOpen || !hostRef.current) return;
@@ -64,8 +95,11 @@ export default function PdfViewer({ ctx }: Props) {
     const textLayers: pdfjsLib.TextLayer[] = [];
     (async () => {
       try {
-        const blob = await api.fetchPdf("main.pdf");
+        // Compiled output comes from the artifact endpoint; anything else is a
+        // raw project file (the PDF library).
+        const blob = pdfFile ? await api.fetchRawFile(pdfFile) : await api.fetchPdf("main.pdf");
         if (cancelled) return;
+        if (!blob) throw new Error(`could not read ${pdfFile}`);
         const data = await blob.arrayBuffer();
         const doc = await pdfjsLib.getDocument({ data }).promise;
         if (cancelled) {
@@ -118,7 +152,7 @@ export default function PdfViewer({ ctx }: Props) {
       cancelled = true;
       for (const l of textLayers) l.cancel();
     };
-  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, zoom]);
+  }, [ctx.projectOpen, ctx.projectRoot, outputTick, zoom, pdfFile]);
 
   // Forward search (M3): editor click → scroll to the line + flash it.
   useEffect(() => {
@@ -217,12 +251,80 @@ export default function PdfViewer({ ctx }: Props) {
 
   const nudgeZoom = (d: number) => setSetting("zoom", Math.max(50, Math.min(300, zoom + d)));
 
+  const openSshForm = () => {
+    setDraft(ctx.project?.ssh ?? {});
+    setShowSsh(true);
+  };
+  const saveSsh = () => {
+    ctx.onSaveSsh(draft);
+    setShowSsh(false);
+  };
+
+  const jobRunning = !!ctx.job && ctx.job.status === "running";
+  // A compile finished while a static file was open → offer the fresh output.
+  const freshOutput =
+    !!pdfFile && versionAtOpenRef.current !== null && ctx.pdfVersion !== versionAtOpenRef.current;
+
   return (
     <div className="pdf-pane">
       <div className="pane-header">
-        <span>PDF preview</span>
+        {pdfFile ? (
+          <>
+            <span title={pdfFile}>{baseName(pdfFile)}</span>
+            <span className="badge" title="Static project file — read-only, no SyncTeX">file</span>
+            <button type="button" className="mini" onClick={() => ctx.onShowMainPdf()} title="Show the compiled main.pdf output">
+              Compiled output
+            </button>
+            {freshOutput && (
+              <button type="button" className="mini active" onClick={() => ctx.onShowMainPdf()} title="A compile finished while this file was open — view the new main.pdf">
+                New output
+              </button>
+            )}
+          </>
+        ) : (
+          <>
+            <span>PDF preview</span>
+            {ctx.project && (
+              <label className="auto-compile" title="Compile automatically after saving a .tex file">
+                <input type="checkbox" checked={ctx.autoCompile} onChange={(e) => ctx.onAutoCompile(e.target.checked)} />
+                Auto-compile
+              </label>
+            )}
+          </>
+        )}
         {status && <span className="muted">{status}</span>}
         <span className="head-spacer" />
+        {!pdfFile && ctx.project && (
+          <span className="target-pick">
+            <span className="target-label">Target</span>
+            <select
+              value={ctx.project.target}
+              onChange={(e) => ctx.onTarget(e.target.value)}
+              title={targetTooltip(ctx.project.target, ctx.targetStatuses)}
+            >
+              {!(COMPILE_TARGETS as readonly string[]).includes(ctx.project.target) && (
+                <option value={ctx.project.target} disabled>{ctx.project.target} — unavailable</option>
+              )}
+              <option value="auto">Auto</option>
+              <option value="local">Local (host TeX)</option>
+              {hasWslTarget(ctx.targetStatuses) && <option value="wsl">WSL</option>}
+              <option value="ssh">SSH (remote)</option>
+            </select>
+            {needsInstall(ctx.project.target, ctx.targetStatuses) && (
+              <button type="button" className="target-warn" title={installHint(ctx.project.target, ctx.targetStatuses)} onClick={() => ctx.onShowInstall()}>
+                TeX missing — install
+              </button>
+            )}
+            <button type="button" className="target-ssh" onClick={openSshForm} title="Configure the SSH compile target (host, user, key)">
+              SSH…
+            </button>
+          </span>
+        )}
+        {!pdfFile && (jobRunning ? (
+          <button onClick={() => ctx.onCancelJob()} className="danger">Cancel</button>
+        ) : (
+          <button onClick={() => ctx.onCompile()} disabled={!ctx.projectOpen} className="primary">Compile</button>
+        ))}
         <button type="button" className="mini" onClick={() => nudgeZoom(-25)} title="Zoom out">−</button>
         <span className="zoom-label" title="Zoom">{zoom}%</span>
         <button type="button" className="mini" onClick={() => nudgeZoom(25)} title="Zoom in">+</button>
@@ -249,6 +351,58 @@ export default function PdfViewer({ ctx }: Props) {
           onChange={setSetting}
           onClose={() => setGearOpen(null)}
         />
+      )}
+      {showSsh && ctx.project && (
+        <div className="ssh-form">
+          <h4>SSH compile target — {ctx.project.name}</h4>
+          <label>Host
+            <input
+              value={draft.host ?? ""}
+              onChange={(e) => setDraft({ ...draft, host: e.target.value })}
+              placeholder="labserver"
+            />
+          </label>
+          <label>User
+            <input
+              value={draft.user ?? ""}
+              onChange={(e) => setDraft({ ...draft, user: e.target.value })}
+              placeholder="alice"
+            />
+          </label>
+          <label>Port
+            <input
+              type="number"
+              min={1}
+              max={65535}
+              value={draft.port ?? 22}
+              onChange={(e) =>
+                setDraft({ ...draft, port: e.target.value === "" ? undefined : Number(e.target.value) })
+              }
+            />
+          </label>
+          <label>Key path
+            <input
+              value={draft.key ?? ""}
+              onChange={(e) => setDraft({ ...draft, key: e.target.value })}
+              placeholder="blank = default ssh keys"
+            />
+          </label>
+          <label>Remote dir
+            <input
+              value={draft.remote_dir ?? ""}
+              onChange={(e) => setDraft({ ...draft, remote_dir: e.target.value })}
+              placeholder={`~/workbench/${ctx.project.name}`}
+            />
+          </label>
+          <p className="ssh-form-note">
+            Key-based auth only (no password prompts). The project is synced up before each compile;
+            PDF + SyncTeX are pulled back. The remote machine needs TeX Live + latexmk.
+          </p>
+          <div className="ssh-form-actions">
+            <button className="primary" onClick={saveSsh} disabled={!draft.host || !draft.user}>Save</button>
+            <button onClick={() => setShowSsh(false)}>Cancel</button>
+          </div>
+        </div>
       )}
     </div>
   );
