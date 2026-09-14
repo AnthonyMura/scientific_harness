@@ -4,7 +4,7 @@
 import type { TargetStatus } from "../types";
 
 /** Compile target names the backend accepts (targets.get_target). */
-export const COMPILE_TARGETS = ["auto", "local", "wsl"] as const;
+export const COMPILE_TARGETS = ["auto", "local", "wsl", "ssh"] as const;
 export type CompileTarget = (typeof COMPILE_TARGETS)[number];
 
 function firstLine(s: string): string {
@@ -44,6 +44,13 @@ export function targetTooltip(target: string, targets: TargetStatus[] | null): s
     const base = `wsl — ${w.detail || (w.tex_found ? "TeX found" : "no TeX in the WSL distro")}`;
     return !w.tex_found && w.can_install && w.install_hint ? `${base}. ${w.install_hint}` : base;
   }
+  if (target === "ssh") {
+    const sh = targets?.find((t) => t.name === "ssh");
+    if (!sh) return "ssh — remote compile over key-based ssh (configure with SSH… in the top bar)";
+    if (!sh.available) return `ssh — ${sh.detail}`;
+    if (sh.tex_found) return `ssh — ${sh.detail} (${firstLine(sh.version)})`;
+    return `ssh — ${sh.detail}. ${sh.install_hint}`;
+  }
   // auto
   const s = localTexSummary(targets);
   const wslOk = !!targets?.find((t) => t.name === "wsl")?.tex_found;
@@ -62,6 +69,10 @@ export function needsInstall(target: string, targets: TargetStatus[] | null): bo
       return !s.ok;
     case "wsl":
       return !wslOk;
+    case "ssh": {
+      const sh = targets.find((t) => t.name === "ssh");
+      return !!sh && !sh.tex_found;
+    }
     default:
       return !s.ok && !wslOk; // auto
   }
@@ -72,6 +83,10 @@ export function installHint(target: string, targets: TargetStatus[] | null): str
   if (target === "wsl") {
     const w = targets?.find((t) => t.name === "wsl");
     return w?.install_hint || "Install TeX in the WSL distro via the Install panel.";
+  }
+  if (target === "ssh") {
+    return targets?.find((t) => t.name === "ssh")?.install_hint ||
+      "Set up TeX Live + latexmk on the remote machine, then re-probe.";
   }
   return hintForLocal(targets) || "Install TeX via the Install panel (in-app TinyTeX is recommended).";
 }

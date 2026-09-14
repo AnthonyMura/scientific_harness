@@ -6,6 +6,16 @@ export interface Project {
   target: string;
   /** Auto-compile after saving a .tex file (per project, M3). */
   auto_compile: boolean;
+  /** SSH compile target config (M4, per project); null/absent = not set. */
+  ssh?: SshConfig | null;
+}
+
+export interface SshConfig {
+  host?: string;
+  user?: string;
+  port?: number;
+  key?: string;
+  remote_dir?: string;
 }
 
 export interface FileEntry {
