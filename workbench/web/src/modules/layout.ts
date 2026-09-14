@@ -6,6 +6,8 @@ import { MODULE_DEFS } from "./defs";
 
 export const FILE_DRAG_MIME = "application/x-workbench-file";
 export const TAB_DRAG_MIME = "application/x-workbench-tab";
+/** Activity-bar module drag: open/move a module into the hovered pane. */
+export const MODULE_DRAG_MIME = "application/x-workbench-module";
 
 export interface Tab {
   id: string;
@@ -36,7 +38,8 @@ export type LayoutAction =
   | { type: "focus"; groupId: string }
   | { type: "close"; tabId: string }
   | { type: "move"; tabId: string; groupId: string; index?: number }
-  | { type: "split"; groupId: string; dir: "h" | "v"; withTabId?: string }
+  /** side "before" puts the new pane left/top of the group, "after" right/bottom. */
+  | { type: "split"; groupId: string; dir: "h" | "v"; side?: "before" | "after"; withTabId?: string; withModuleId?: string }
   | { type: "removeGroup"; groupId: string }
   | { type: "resize"; splitId: string; ratio: number }
   | { type: "fullscreen"; nodeId: string | null }
@@ -103,6 +106,53 @@ function findParent(
     if (n.a === id) return { split: n, which: "a" };
     if (n.b === id) return { split: n, which: "b" };
     stack.push(n.a, n.b);
+  }
+  return null;
+}
+
+/** Does the subtree rooted at id contain the given group? */
+function containsGroup(nodes: Record<string, Node>, id: string, groupId: string): boolean {
+  const seen = new Set<string>();
+  const stack: string[] = [id];
+  while (stack.length) {
+    const cur = stack.pop()!;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    const n = nodes[cur];
+    if (!n) continue;
+    if (n.kind === "group") {
+      if (cur === groupId) return true;
+      continue;
+    }
+    stack.push(n.a, n.b);
+  }
+  return false;
+}
+
+/** Splits on the path from the root down to (not including) a group. */
+export function pathToGroup(
+  nodes: Record<string, Node>,
+  rootId: string,
+  groupId: string,
+): { split: SplitNode; which: "a" | "b" }[] | null {
+  const chain: { split: SplitNode; which: "a" | "b" }[] = [];
+  let cur: string | null = rootId;
+  const seen = new Set<string>();
+  while (cur) {
+    if (seen.has(cur)) return null; // cycle guard
+    seen.add(cur);
+    const n: Node | undefined = nodes[cur];
+    if (!n) return null;
+    if (n.kind === "group") return cur === groupId ? chain : null;
+    if (containsGroup(nodes, n.a, groupId)) {
+      chain.push({ split: n, which: "a" });
+      cur = n.a;
+    } else if (containsGroup(nodes, n.b, groupId)) {
+      chain.push({ split: n, which: "b" });
+      cur = n.b;
+    } else {
+      return null;
+    }
   }
   return null;
 }
@@ -245,12 +295,13 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
       const g = state.nodes[action.groupId];
       if (!isGroup(g)) return state;
       const newGroup: GroupNode = { id: nid("g-"), kind: "group", tabs: [], active: null };
+      const before = action.side === "before";
       const split: SplitNode = {
         id: nid("s-"),
         kind: "split",
         dir: action.dir,
-        a: action.groupId,
-        b: newGroup.id,
+        a: before ? newGroup.id : action.groupId,
+        b: before ? action.groupId : newGroup.id,
         ratio: 0.5,
       };
       let nodes: Record<string, Node>;
@@ -284,6 +335,16 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
           homes: { ...next.homes, [t.moduleId]: newGroup.id },
           lastEditor: t.moduleId === "editor" ? tabId : next.lastEditor,
         };
+      }
+      // A module dragged from the activity bar lands in the fresh pane.
+      if (action.withModuleId) {
+        const def = MODULE_DEFS[action.withModuleId];
+        if (def) {
+          const id = def.tabId();
+          next = next.tabs[id]
+            ? layoutReducer(next, { type: "move", tabId: id, groupId: newGroup.id })
+            : layoutReducer(next, { type: "open", moduleId: action.withModuleId, groupId: newGroup.id });
+        }
       }
       return next;
     }
