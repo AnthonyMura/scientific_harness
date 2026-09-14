@@ -1,7 +1,7 @@
 // Editor module: CodeMirror with the Vesper palette. Font size and line height
 // apply live via CSS vars; tab size / word wrap recreate the view.
 import React, { useEffect, useRef, useState } from "react";
-import { EditorState } from "@codemirror/state";
+import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
@@ -24,6 +24,20 @@ export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "toggle", key: "wrap", label: "Word wrap" },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = { fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false };
+
+/** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX;
+ *  anything else (.txt, .bib, .json, ...) opens as plain text. */
+function langForPath(p: string): Extension[] {
+  const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
+  if (ext === "md" || ext === "markdown") return [markdown()];
+  if (ext === "tex" || ext === "sty" || ext === "cls") return [latexLanguage];
+  return [];
+}
+
+/** Vesper chrome: the text cursor in brick, the palette's accent red. */
+const vesperChrome = EditorView.theme({
+  "& .cm-cursor": { borderLeftColor: "var(--brick)" },
+});
 
 interface Props {
   ctx: AppCtx;
@@ -64,11 +78,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
     (async () => {
       const r = await api.readFile(filePath);
       if (cancelled || !hostRef.current) return;
-      const lang = filePath.endsWith(".md")
-        ? [markdown()]
-        : filePath.endsWith(".tex")
-          ? [latexLanguage]
-          : []; // any other file type opens as plain text
+      const lang = langForPath(filePath);
       const save = () => {
         if (!view) return;
         void api
@@ -92,6 +102,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
             highlightSelectionMatches(),
             bracketMatching(),
             syntaxHighlighting(vesperHighlight),
+            vesperChrome,
             keymap.of([
               ...defaultKeymap,
               ...historyKeymap,
