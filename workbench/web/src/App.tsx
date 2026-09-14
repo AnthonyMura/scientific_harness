@@ -25,6 +25,8 @@ export default function App() {
   const [pdfSync, setPdfSync] = useState<SyncRequest | null>(null);
   const [editorGoto, setEditorGoto] = useState<SyncRequest | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  /** Static PDF open in the PDF pane (null = compiled main.pdf output). */
+  const [pdfFile, setPdfFile] = useState<string | null>(null);
   // Compile-target selector (M3): probe results + a tick that re-probes
   // after every install job settles.
   const [targetStatuses, setTargetStatuses] = useState<TargetStatus[] | null>(null);
@@ -47,6 +49,11 @@ export default function App() {
   useEffect(() => {
     persistLayout(layout, project?.root ?? null);
   }, [layout, project]);
+
+  // A statically opened PDF belongs to the previous project's tree.
+  useEffect(() => {
+    setPdfFile(null);
+  }, [project?.root]);
 
   /** Open (or focus) the default set of modules for a project. */
   // Default template: explorer in the sidebar, editor in the center pane; PDF,
@@ -217,6 +224,7 @@ export default function App() {
     finishedRef.current = null;
     activeJobIdRef.current = id;
     dispatch({ type: "open", moduleId: "log" }); // show the run log while a job runs
+    if (kind === "compile") dispatch({ type: "open", moduleId: "pdf" }); // compile controls live in the PDF pane
     setJob({ id, kind, label, status: "running", exit_code: null, logLines: [], errors: [], artifacts: {} });
   };
 
@@ -334,6 +342,20 @@ export default function App() {
     dispatch({ type: "open", moduleId: "editor", params: { filePath: path } });
   }, []);
 
+  const onOpenPdf = useCallback((path: string) => {
+    setPdfFile(path);
+    dispatch({ type: "open", moduleId: "pdf" });
+  }, []);
+
+  const onShowMainPdf = useCallback(() => {
+    setPdfFile(null);
+    dispatch({ type: "open", moduleId: "pdf" });
+  }, []);
+
+  const onShowInstall = useCallback(() => {
+    dispatch({ type: "open", moduleId: "install" });
+  }, []);
+
   const onPathsGone = useCallback((prefixes: string[]) => {
     const gone = (fp: string) => prefixes.some((p) => fp === p || fp.startsWith(p + "/"));
     for (const t of Object.values(layoutRef.current.tabs)) {
@@ -341,6 +363,7 @@ export default function App() {
       const fp = t.params?.filePath ? String(t.params.filePath) : null;
       if (fp && gone(fp)) dispatch({ type: "close", tabId: t.id });
     }
+    setPdfFile((cur) => (cur && gone(cur) ? null : cur)); // drop a deleted static PDF
   }, []);
 
   const onFileRenamed = useCallback((oldPath: string, newPath: string) => {
@@ -351,6 +374,7 @@ export default function App() {
 
   // --- SyncTeX channels (M3): editor click → PDF jump; PDF click → line.
   const syncToPdf = useCallback((file: string, line: number) => {
+    setPdfFile(null); // forward search targets the compiled output
     setPdfSync((s) => ({ file, line, nonce: (s?.nonce ?? 0) + 1 }));
   }, []);
 
@@ -368,6 +392,17 @@ export default function App() {
       projectRoot: project?.root ?? null,
       activeFile,
       editorFocused,
+      project,
+      pdfFile,
+      onOpenPdf,
+      onShowMainPdf,
+      onCompile: () => void compile(),
+      autoCompile: !!project?.auto_compile,
+      onAutoCompile: (on) => void setAutoCompile(on),
+      targetStatuses,
+      onTarget: (t) => void setTarget(t),
+      onSaveSsh: saveSsh,
+      onShowInstall,
       pdfVersion,
       job,
       onOpenFile,
@@ -381,7 +416,9 @@ export default function App() {
       syncToEditor,
       onFileSaved,
     }),
-    [project, activeFile, editorFocused, pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
+    [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall,
+     setAutoCompile, setTarget, saveSsh,
+     pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
   );
 
@@ -391,17 +428,9 @@ export default function App() {
         project={project}
         recent={recent}
         devMode={devMode}
-        jobRunning={!!job && job.status === "running"}
-        autoCompile={!!project?.auto_compile}
-        onAutoCompile={(on) => void setAutoCompile(on)}
-        targetStatuses={targetStatuses}
-        onTarget={(t) => void setTarget(t)}
-        onSaveSsh={(cfg) => void saveSsh(cfg)}
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
-        onCompile={() => void compile()}
-        onCancelJob={() => void cancelJob()}
         showInstall={false}
         onToggleInstall={() => dispatch({ type: "open", moduleId: "install" })}
       />
