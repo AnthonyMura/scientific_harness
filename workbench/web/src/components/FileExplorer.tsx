@@ -254,6 +254,8 @@ export default function FileExplorer({ ctx }: Props) {
     setSelected(e.path);
     if (e.is_dir) {
       toggle(e.path); // single click: select + expand/collapse folders
+    } else if (/\.pdf$/i.test(e.name)) {
+      ctx.onOpenPdf(e.path); // PDFs open read-only in the PDF pane
     } else if (ctx.editorFocused) {
       ctx.onOpenFile(e.path); // editor activated: a single click opens the file
     }
@@ -333,7 +335,7 @@ export default function FileExplorer({ ctx }: Props) {
                 }
                 style={{ paddingLeft: 8 + depth * 14 }}
                 onClick={() => rowClick(e)}
-                onDoubleClick={() => { if (!e.is_dir) ctx.onOpenFile(e.path); }}
+                onDoubleClick={() => { if (e.is_dir) return; if (/\.pdf$/i.test(e.name)) ctx.onOpenPdf(e.path); else ctx.onOpenFile(e.path); }}
                 draggable={!e.is_dir}
                 onDragStart={(ev) => {
                   if (e.is_dir) return;
