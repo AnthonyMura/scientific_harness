@@ -1,5 +1,6 @@
 // Editor module: CodeMirror with the Vesper palette. Font size and line height
-// apply live via CSS vars; tab size / word wrap recreate the view.
+// apply live via CSS vars; tab size / word wrap recreate the view. Cursor
+// shape (line/block/underline) and smooth motion are data attributes — live too.
 import React, { useEffect, useRef, useState } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
@@ -22,8 +23,12 @@ export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "lineHeight", label: "Line height", min: 1.3, max: 2.4, step: 0.1 },
   { kind: "number", key: "tabSize", label: "Tab size", min: 2, max: 8, step: 2, unit: "sp" },
   { kind: "toggle", key: "wrap", label: "Word wrap" },
+  { kind: "select", key: "cursorType", label: "Cursor type", options: ["line", "block", "underline"] },
+  { kind: "toggle", key: "smoothCursor", label: "Smooth cursor motion" },
 ];
-export const EDITOR_DEFAULTS: ModuleSettings = { fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false };
+export const EDITOR_DEFAULTS: ModuleSettings = {
+  fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line", smoothCursor: true,
+};
 
 /** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX;
  *  anything else (.txt, .bib, .json, ...) opens as plain text. */
@@ -163,9 +168,17 @@ export default function EditorPane({ ctx, filePath }: Props) {
 
   const fs = typeof settings.fontSize === "number" ? settings.fontSize : 15;
   const lh = typeof settings.lineHeight === "number" ? settings.lineHeight : 1.7;
+  // Cursor shape + smooth motion apply live via data attributes (no view recreation).
+  const cursorType = typeof settings.cursorType === "string" ? settings.cursorType : "line";
+  const smoothCursor = !!settings.smoothCursor;
 
   return (
-    <div className="editor-pane" style={{ "--cm-fs": `${fs}px`, "--cm-lh": String(lh) } as React.CSSProperties}>
+    <div
+      className="editor-pane"
+      data-cursor={cursorType}
+      data-smooth={smoothCursor ? "on" : "off"}
+      style={{ "--cm-fs": `${fs}px`, "--cm-lh": String(lh) } as React.CSSProperties}
+    >
       <div className="pane-header">
         <span>{filePath ?? "no file selected"}</span>
         <span className={"dot" + (dirty ? " dirty" : "")} title={dirty ? "unsaved changes" : "saved"} />

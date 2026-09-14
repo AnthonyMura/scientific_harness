@@ -342,7 +342,24 @@ input::placeholder { color: var(--text-3); }
   font-size: 10.5px;
 }
 .cm-activeLine { background: rgba(179, 143, 111, 0.06); }
-.cm-cursor { border-left-color: var(--pearl); }
+/* Cursor: brick from the palette. Shape and motion are editor settings —
+   EditorPane sets data-cursor / data-smooth on .editor-pane, applied live. */
+.cm-cursor { border-left-color: var(--brick); }
+.editor-pane[data-cursor="block"] .cm-cursor {
+  border-left-color: transparent;
+  background: rgba(123, 22, 18, 0.55); /* brick at 55% — the character stays readable */
+  width: 1ch;
+}
+.editor-pane[data-cursor="underline"] .cm-cursor {
+  border-left-color: transparent;
+  border-bottom: 2px solid var(--brick);
+  width: 1ch;
+}
+/* Smooth motion: CodeMirror repositions the cursor with inline left/top, so a
+   short transition makes it glide between positions. */
+.editor-pane[data-smooth="on"] .cm-cursor {
+  transition: left 90ms cubic-bezier(0.25, 0.8, 0.35, 1), top 90ms cubic-bezier(0.25, 0.8, 0.35, 1);
+}
 
 /* ---------- PDF viewer ------------------------------------- */
 
@@ -961,6 +978,7 @@ code {
   .split-child { transition: none; }
   .split.h > .split-child.enter, .split.v > .split-child.enter { animation: none; }
   .group.dying { transition: none; }
+  .editor-pane[data-smooth="on"] .cm-cursor { transition: none; }
 }
 
 /* Activity bar items are draggable module sources. */
