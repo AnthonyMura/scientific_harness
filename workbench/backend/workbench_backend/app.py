@@ -140,6 +140,19 @@ def create_app(token: str) -> FastAPI:
         rel = _body_str(body, "path")
         return files.delete_path(root, rel)
 
+    @app.get("/api/files/tex")
+    def files_tex():
+        """All .tex files in the project - for the compile picker and the main-file setting."""
+        root = projects.root_of(st)
+        return {"files": files.tex_files(root)}
+
+    @app.post("/api/files/copy")
+    def files_copy(body: dict):
+        root = projects.root_of(st)
+        src = _body_str(body, "from")
+        dst = _body_str(body, "to")
+        return files.copy_file(root, src, dst)
+
     # --- compile ----------------------------------------------------------------
     @app.post("/api/compile/start")
     def compile_start(body: dict):
@@ -184,6 +197,14 @@ def create_app(token: str) -> FastAPI:
             raise ApiError(404, f"no such artifact: {name}")
         raw = gzip.open(p, "rb").read()
         return PlainTextResponse(raw.decode("utf-8", errors="replace"), headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/artifacts/save-version")
+    def artifact_save_version(body: dict):
+        """Save the compiled PDF as a version in the project's versions/ folder."""
+        root = projects.root_of(st)
+        artifact = _body_str(body, "artifact")
+        name = body.get("name") or None
+        return files.save_version(root, artifact, name)
 
     # --- config ----------------------------------------------------------------
     @app.get("/api/config")

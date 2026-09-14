@@ -159,3 +159,81 @@ def delete_path(root: Path, rel: str) -> dict:
     else:
         p.unlink()
     return {"path": rel}
+
+
+def tex_files(root: Path) -> list[str]:
+    """All .tex files in the project (project-relative), sorted by path.
+
+    The app's own state/build tree (.workbench) is skipped - it holds build
+    artifacts, not sources. Used by the "what to compile" picker and the
+    main-file setting (Overleaf-style: choose from files, not by name).
+    """
+    root_resolved = root.resolve()
+    found: list[str] = []
+
+    def walk(d: Path) -> None:
+        try:
+            children = sorted(d.iterdir(), key=lambda p: p.name.lower())
+        except OSError:
+            return
+        for child in children:
+            if child.name.startswith("."):
+                continue  # dotfiles/dirs (.git, .workbench, ...) are not sources
+            if child.is_dir():
+                walk(child)
+            elif child.suffix.lower() == ".tex":
+                try:
+                    found.append(str(child.relative_to(root_resolved)).replace("\\", "/"))
+                except ValueError:
+                    pass
+
+    walk(root_resolved)
+    return sorted(found)
+
+
+def copy_file(root: Path, src_rel: str, dst_rel: str) -> dict:
+    """Copy a project file to another project path (Save As / duplicate).
+
+    Parent directories are created; an existing target is refused (409) so a
+    save can never silently clobber a source.
+    """
+    src = safe_path(root, src_rel)
+    dst = safe_path(root, dst_rel)
+    if not src.is_file():
+        raise ApiError(404, f"not found: {src_rel}")
+    if dst.exists():
+        raise ApiError(409, f"already exists: {dst_rel}")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(src, dst)
+    return {"from": src_rel, "to": dst_rel}
+
+
+def save_version(root: Path, artifact_name: str, name: str | None = None) -> dict:
+    """Save a compiled PDF as a version in the project's `versions/` folder.
+
+    Formalizes the manual habit of keeping compiled PDFs as meaningful
+    versions (technical_description_v3 section 142): one copy per deliberate
+    save, timestamped by default so repeated saves never collide.
+    """
+    from . import state as _state  # local import: keep files.py import-light
+
+    artifact = Path(artifact_name).name  # no traversal into the build dir
+    src = _state.build_dir(root) / artifact
+    if not src.is_file():
+        raise ApiError(404, f"no such artifact: {artifact}")
+    stem = Path(artifact).stem or "document"
+    if name and name.strip():
+        n = Path(name.strip()).name  # flatten to a bare file name
+        if not n.lower().endswith(".pdf"):
+            n += ".pdf"
+    else:
+        from datetime import datetime
+
+        n = f"{stem}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf"
+    versions_dir = root.resolve() / "versions"
+    versions_dir.mkdir(exist_ok=True)
+    dst = versions_dir / n
+    if dst.exists():
+        raise ApiError(409, f"already exists: versions/{n}")
+    shutil.copy2(src, dst)
+    return {"path": f"versions/{n}"}
