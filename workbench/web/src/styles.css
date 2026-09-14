@@ -822,6 +822,7 @@ code {
 .set-ctl button.mini { padding: 2px 8px; font-size: 12px; line-height: 1.3; }
 .set-toggle { padding: 3px 10px; font-size: 10px; color: var(--text-3); border-color: rgba(179, 143, 111, 0.25); }
 .set-toggle.on { color: var(--gold); border-color: rgba(179, 143, 111, 0.5); background: rgba(179, 143, 111, 0.12); }
+.set-select { padding: 3px 6px; font-size: 11px; text-transform: capitalize; }
 
 /* pane header helpers */
 .head-spacer { flex: 1; }

@@ -2,16 +2,18 @@
 import { useCallback, useState } from "react";
 
 export interface SettingControl {
-  kind: "number" | "toggle";
+  kind: "number" | "toggle" | "select";
   key: string;
   label: string;
   min?: number;
   max?: number;
   step?: number;
   unit?: string;
+  /** Allowed values for `kind: "select"` controls. */
+  options?: readonly string[];
 }
 
-export type SettingValue = number | boolean;
+export type SettingValue = number | boolean | string;
 export type ModuleSettings = Record<string, SettingValue>;
 
 const KEY = "workbench.settings.v1";

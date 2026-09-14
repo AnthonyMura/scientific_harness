@@ -1,4 +1,4 @@
-// Gear popover: per-module settings controls (number steppers + toggles).
+// Gear popover: per-module settings controls (number steppers, toggles, selects).
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ModuleSettings, SettingControl, SettingValue } from "../modules/settings";
@@ -34,6 +34,18 @@ function NumberControl({ c, value, onChange }: { c: SettingControl; value: numbe
         +
       </button>
     </span>
+  );
+}
+
+function SelectControl({ c, value, onChange }: { c: SettingControl; value: string; onChange: Props["onChange"] }) {
+  return (
+    <select className="set-select" value={value} aria-label={c.label} onChange={(e) => onChange(c.key, e.target.value)}>
+      {(c.options ?? []).map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -78,6 +90,8 @@ export default function SettingsMenu({ x, y, title, controls, values, onChange, 
             <span className="set-label">{c.label}</span>
             {c.kind === "number" ? (
               <NumberControl c={c} value={typeof values[c.key] === "number" ? (values[c.key] as number) : 0} onChange={onChange} />
+            ) : c.kind === "select" ? (
+              <SelectControl c={c} value={typeof values[c.key] === "string" ? (values[c.key] as string) : ""} onChange={onChange} />
             ) : (
               <button
                 type="button"
