@@ -52,6 +52,8 @@ function SelectControl({ c, value, onChange }: { c: SettingControl; value: strin
 export default function SettingsMenu({ x, y, title, controls, values, onChange, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
+  // Sub-settings (visibleWhen) only render while their parent setting matches.
+  const visible = controls.filter((c) => !c.visibleWhen || values[c.visibleWhen.key] === c.visibleWhen.value);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -82,10 +84,10 @@ export default function SettingsMenu({ x, y, title, controls, values, onChange, 
   return createPortal(
     <div className="menu settings" ref={ref} style={{ left: pos.x, top: pos.y }} role="dialog" aria-label={title}>
       <div className="menu-title">{title}</div>
-      {controls.length === 0 ? (
+      {visible.length === 0 ? (
         <div className="menu-empty">No settings yet.</div>
       ) : (
-        controls.map((c) => (
+        visible.map((c) => (
           <div key={c.key} className="set-row">
             <span className="set-label">{c.label}</span>
             {c.kind === "number" ? (
