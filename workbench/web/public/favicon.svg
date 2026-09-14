@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Scientific Harness — Vesper favicon: brick tile, pearl serif S -->
+  <rect x="1.5" y="1.5" width="61" height="61" rx="14" fill="#7B1612"/>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="12" fill="none" stroke="#B38F6F" stroke-opacity="0.35" stroke-width="1.5"/>
+  <text x="32" y="44.5" font-family="'Cormorant Garamond', Palatino, 'Palatino Linotype', Georgia, serif" font-size="38" font-weight="600" fill="#F2F1ED" text-anchor="middle">S</text>
+</svg>
