@@ -4,6 +4,8 @@ export interface Project {
   root: string;
   main_file: string;
   target: string;
+  /** Auto-compile after saving a .tex file (per project, M3). */
+  auto_compile: boolean;
 }
 
 export interface FileEntry {

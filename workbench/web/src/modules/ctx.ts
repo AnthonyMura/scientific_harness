@@ -34,4 +34,6 @@ export interface AppCtx {
   syncToPdf: (file: string, line: number) => void;
   /** Open/focus a file at a source line (inverse search from the PDF). */
   syncToEditor: (file: string, line: number) => void;
+  /** A file was saved in the editor (auto-compile on save, M3). */
+  onFileSaved: (path: string) => void;
 }
