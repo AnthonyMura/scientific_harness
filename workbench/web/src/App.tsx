@@ -6,7 +6,7 @@ import type { ActiveJob, Project, SshConfig, TargetStatus } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
 import type { AppCtx, SyncRequest } from "./modules/ctx";
-import { layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
+import { findParent, groupOfTab, layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -222,12 +222,41 @@ export default function App() {
     }
   };
 
+  /** PDF pane for compile jobs: keep it as the right-hand sibling of the active
+   *  editor — focus it if it is already there, otherwise place (or move) it. */
+  const openPdfPane = useCallback(() => {
+    const st = layoutRef.current;
+    let g = st.lastEditor ? groupOfTab(st, st.lastEditor) : null;
+    if (!g) {
+      const fg = st.focusedGroup ? st.nodes[st.focusedGroup] : null;
+      g = fg && fg.kind === "group" ? fg.id : null;
+    }
+    if (!g) {
+      dispatch({ type: "open", moduleId: "pdf" });
+      return;
+    }
+    const pdfGroup = st.tabs["pdf"] ? groupOfTab(st, "pdf") : null;
+    if (pdfGroup) {
+      const p = findParent(st.nodes, st.rootId, g);
+      // Already the right-hand sibling of this editor group — just focus it.
+      if (p && p.split.dir === "h" && p.split.b === pdfGroup) {
+        dispatch({ type: "open", moduleId: "pdf" });
+        return;
+      }
+    }
+    dispatch(
+      st.tabs["pdf"]
+        ? { type: "split", groupId: g, dir: "h", side: "after", withTabId: "pdf" }
+        : { type: "split", groupId: g, dir: "h", side: "after", withModuleId: "pdf" },
+    );
+  }, []);
+
   const beginJob = (id: string, kind: "compile" | "install", label: string) => {
     offsetRef.current = 0;
     finishedRef.current = null;
     activeJobIdRef.current = id;
     dispatch({ type: "open", moduleId: "log" }); // show the run log while a job runs
-    if (kind === "compile") dispatch({ type: "open", moduleId: "pdf" }); // compile controls live in the PDF pane
+    if (kind === "compile") openPdfPane(); // compile controls live in the PDF pane
     setJob({ id, kind, label, status: "running", exit_code: null, logLines: [], errors: [], artifacts: {} });
   };
 
