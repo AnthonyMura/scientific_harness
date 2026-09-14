@@ -264,6 +264,12 @@ export default function PdfViewer({ ctx }: Props) {
   // A compile finished while a static file was open → offer the fresh output.
   const freshOutput =
     !!pdfFile && versionAtOpenRef.current !== null && ctx.pdfVersion !== versionAtOpenRef.current;
+  // Compile state for the header: the PDF only changes when a compile succeeds,
+  // so say what is happening - and where to look when it fails.
+  const compileJob = ctx.job?.kind === "compile" ? ctx.job : null;
+  const compiling = !!compileJob && compileJob.status === "running";
+  const compileFailed =
+    !!compileJob && (compileJob.status === "error" || (compileJob.status === "done" && compileJob.exit_code !== 0));
 
   return (
     <div className="pdf-pane">
@@ -293,6 +299,12 @@ export default function PdfViewer({ ctx }: Props) {
           </>
         )}
         {status && <span className="muted">{status}</span>}
+        {!pdfFile && compiling && <span className="chip running">compiling...</span>}
+        {!pdfFile && compileFailed && (
+          <button type="button" className="mini danger" onClick={() => ctx.onShowLog()} title="The last compile failed - open the Run Log to see why">
+            Compile failed - Run Log
+          </button>
+        )}
         <span className="head-spacer" />
         {!pdfFile && ctx.project && (
           <span className="target-pick">
