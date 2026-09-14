@@ -34,6 +34,14 @@ gear popover ("Editor settings"):
   forces `caret-color: transparent` on `.cm-content` — including the focused
   state, where drawSelection's own rule would restore a native caret in the
   text color.
+- `web/src/modules/settings.ts` + `SettingsMenu.tsx` — `SettingControl` gains
+  an optional `visibleWhen: { key, value }`: rows declared with it render only
+  while that other setting matches (a sub-setting). The editor uses it for the
+  new `cursorLineWidth` number control (1–6 px, step 0.2, default 1.2), shown
+  only while Cursor type is `line`; EditorPane applies it live as the
+  `--cm-cursor-w` CSS var and `styles.css` picks it up via
+  `.editor-pane[data-cursor="line"] .cm-cursor { border-left-width: ... }` —
+  scoped so block/underline keep their 1ch box.
 - `web/src/styles.css` — cursor rules keyed off those attributes: brick line
   (was pearl), block = brick at 55% over one `ch`, underline = 2px brick
   bottom border; smooth motion = 90ms transition on the cursor's inline
@@ -55,3 +63,8 @@ simply did not exist). Verified with a headless Chrome CDP session against
 element renders with computed `border-left-color: rgb(123, 22, 18)` (brick),
 the native caret computes to transparent, and a keyboard selection paints
 `rgba(179, 143, 111, 0.32)` (palette sand).
+
+Line-width sub-setting (2026-09-14): CDP check — with `cursorLineWidth: 4` the
+focused `.cm-cursor` computes to `border-left-width: 4px` in brick; the gear
+menu shows "Cursor line width" while Cursor type is `line` and hides it for
+`block`/`underline`; the value persists to localStorage.
