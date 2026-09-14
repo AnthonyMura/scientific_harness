@@ -12,7 +12,7 @@ import type { MenuItem } from "./ContextMenu";
 import SettingsMenu from "./SettingsMenu";
 import {
   CollapseAllIcon, ChevronDownIcon, ChevronRightIcon, entryIcon, FilePlusIcon,
-  FolderPlusIcon, GearIcon, PencilIcon, RefreshIcon, TrashIcon,
+  FolderPlusIcon, GearIcon, isImageName, PencilIcon, RefreshIcon, TrashIcon,
 } from "../icons";
 
 export const EXPLORER_SETTINGS: SettingControl[] = [
@@ -39,6 +39,41 @@ function parentDir(p: string): string {
 }
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Max bytes to fetch for a tree thumbnail; larger files keep the plain icon. */
+const THUMB_MAX_BYTES = 1_500_000;
+
+/** Decoded image preview for a tree row (M3); falls back to the file icon. */
+function ImageThumb({ name, path, mtime }: { name: string; path: string; mtime: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    let alive = true;
+    setUrl(null);
+    setFailed(false);
+    api
+      .fetchFileBytes(path)
+      .then((blob) => {
+        if (!alive) return;
+        if (!blob) {
+          setFailed(true);
+          return;
+        }
+        objectUrl = URL.createObjectURL(blob);
+        setUrl(objectUrl);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [path, mtime]);
+  if (failed || url === null) return entryIcon(name, false, false);
+  return <img className="tree-thumb" src={url} alt="" onError={() => setFailed(true)} />;
 }
 
 interface Props {
@@ -311,7 +346,11 @@ export default function FileExplorer({ ctx }: Props) {
                 <span className="twisty">
                   {e.is_dir ? (expanded.has(e.path) ? <ChevronDownIcon size={14} /> : <ChevronRightIcon size={14} />) : null}
                 </span>
-                {entryIcon(e.name, e.is_dir, expanded.has(e.path))}
+                {!e.is_dir && isImageName(e.name) && (e.size ?? 0) <= THUMB_MAX_BYTES ? (
+                  <ImageThumb name={e.name} path={e.path} mtime={e.mtime} />
+                ) : (
+                  entryIcon(e.name, e.is_dir, expanded.has(e.path))
+                )}
                 {isRenaming ? (
                   <input
                     autoFocus

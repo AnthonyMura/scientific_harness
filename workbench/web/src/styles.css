@@ -815,6 +815,7 @@ code {
 .ic-pdf { color: var(--err); }
 .ic-img { color: var(--brown); }
 .ic-file { color: var(--text-3); }
+.tree-thumb { width: 18px; height: 18px; flex: none; object-fit: cover; border-radius: 3px; display: block; }
 .tree-name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .row-actions { display: none; gap: 2px; margin-left: auto; flex: none; }
 .tree-row:hover .row-actions { display: flex; }
