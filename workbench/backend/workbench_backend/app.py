@@ -102,6 +102,13 @@ def create_app(token: str) -> FastAPI:
         data, media_type = files.raw_image(root, path)
         return Response(content=data, media_type=media_type, headers={"Cache-Control": "no-store"})
 
+    @app.get("/api/files/raw-file")
+    def files_raw_file(path: str):
+        """Raw bytes of any project file (PDF reading in the PDF pane)."""
+        root = projects.root_of(st)
+        data, media_type = files.raw_file(root, path)
+        return Response(content=data, media_type=media_type, headers={"Cache-Control": "no-store"})
+
     @app.put("/api/files/write")
     def files_write(body: dict):
         root = projects.root_of(st)

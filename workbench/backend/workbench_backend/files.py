@@ -19,6 +19,9 @@ EDITABLE_SUFFIXES = {".tex", ".md"}
 #: Safety cap for raw image serving (tree thumbnails, M3).
 RAW_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
+#: Safety cap for raw file serving (PDF reading in the PDF pane).
+RAW_FILE_MAX_BYTES = 50 * 1024 * 1024
+
 
 def safe_path(root: Path, rel: str | None) -> Path:
     """Resolve `rel` inside `root`; refuse anything that escapes it."""
@@ -81,6 +84,18 @@ def raw_image(root: Path, rel: str) -> tuple[bytes, str]:
     size = p.stat().st_size
     if size > RAW_IMAGE_MAX_BYTES:
         raise ApiError(413, f"file too large for preview ({size} bytes)") from None
+    return p.read_bytes(), media_type
+
+
+def raw_file(root: Path, rel: str) -> tuple[bytes, str]:
+    """Raw bytes + media type of any project file (PDF reading)."""
+    p = safe_path(root, rel)
+    if not p.is_file():
+        raise ApiError(404, f"not a file: {rel}")
+    size = p.stat().st_size
+    if size > RAW_FILE_MAX_BYTES:
+        raise ApiError(413, f"file too large to open ({size} bytes)") from None
+    media_type = mimetypes.guess_type(p.name)[0] or "application/octet-stream"
     return p.read_bytes(), media_type
 
 
