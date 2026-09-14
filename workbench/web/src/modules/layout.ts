@@ -85,7 +85,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
   return next;
 }
 
-function groupOfTab(state: LayoutState, tabId: string): string | null {
+export function groupOfTab(state: LayoutState, tabId: string): string | null {
   for (const n of Object.values(state.nodes)) if (isGroup(n) && n.tabs.includes(tabId)) return n.id;
   return null;
 }
