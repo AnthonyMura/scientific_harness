@@ -203,6 +203,28 @@ button.mini { padding: 3px 9px; font-size: 10px; }
 .auto-compile input { margin: 0; accent-color: var(--brick); cursor: pointer; }
 .auto-compile:hover { color: var(--pearl); }
 
+.target-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.target-pick select { padding: 4px 6px; font-size: 11px; }
+.target-warn {
+  padding: 3px 9px;
+  font-size: 10px;
+  background: var(--err-tint);
+  border-color: transparent;
+  color: var(--err);
+}
+.target-warn:hover { background: rgba(123, 22, 18, 0.5); color: var(--err); }
+
 select {
   font-family: var(--font-ui);
   font-size: 12px;

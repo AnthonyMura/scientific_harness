@@ -2,7 +2,7 @@
 // the layout reducer; hands every module a shared AppCtx.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api, initApi } from "./api";
-import type { ActiveJob, Project } from "./types";
+import type { ActiveJob, Project, TargetStatus } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
 import type { AppCtx, SyncRequest } from "./modules/ctx";
@@ -25,6 +25,10 @@ export default function App() {
   const [pdfSync, setPdfSync] = useState<SyncRequest | null>(null);
   const [editorGoto, setEditorGoto] = useState<SyncRequest | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  // Compile-target selector (M3): probe results + a tick that re-probes
+  // after every install job settles.
+  const [targetStatuses, setTargetStatuses] = useState<TargetStatus[] | null>(null);
+  const [installTick, setInstallTick] = useState(0);
   const offsetRef = useRef(0);
   const finishedRef = useRef<string | null>(null);
   const activeJobIdRef = useRef<string | null>(null);
@@ -102,6 +106,7 @@ export default function App() {
               void compileRef.current(true);
             }
           }
+          if (snap.kind === "install") setInstallTick((t) => t + 1); // re-probe targets
         }
         setJob((prev) =>
           prev && prev.id === jobId
@@ -121,6 +126,25 @@ export default function App() {
     }, 700);
     return () => clearInterval(t);
   }, [job?.id, job?.status]);
+
+  // Probe compile targets for the top-bar selector: on project open and
+  // after every install job settles.
+  useEffect(() => {
+    if (!project) {
+      setTargetStatuses(null);
+      return;
+    }
+    let alive = true;
+    void api
+      .installStatus()
+      .then((r) => {
+        if (alive) setTargetStatuses(r.targets);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [project?.root, installTick]);
 
   const refreshRecent = async () => {
     try {
@@ -241,6 +265,19 @@ export default function App() {
     [project],
   );
 
+  const setTarget = useCallback(
+    async (target: string) => {
+      if (!project) return;
+      try {
+        await api.setConfig({ project: { target } });
+        setProject((p) => (p ? { ...p, target } : p));
+      } catch (e) {
+        setBanner(errMsg(e));
+      }
+    },
+    [project],
+  );
+
   const startInstall = useCallback(async (target: string, distro?: string) => {
     try {
       const r = await api.startInstall(target, distro);
@@ -334,6 +371,8 @@ export default function App() {
         jobRunning={!!job && job.status === "running"}
         autoCompile={!!project?.auto_compile}
         onAutoCompile={(on) => void setAutoCompile(on)}
+        targetStatuses={targetStatuses}
+        onTarget={(t) => void setTarget(t)}
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
