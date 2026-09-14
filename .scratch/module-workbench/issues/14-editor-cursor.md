@@ -1,6 +1,6 @@
 # 14 — Editor cursor: palette red, shapes, smooth motion, gear settings
 
-Status: resolved
+Status: resolved (re-verified 2026-09-14 after the drawSelection fix)
 
 ## Scope
 
@@ -26,6 +26,14 @@ gear popover ("Editor settings"):
   (select, default `line`) and `smoothCursor` (toggle, default on). Applied
   live as `data-cursor` / `data-smooth` attributes on `.editor-pane` — no view
   recreation, so switching shapes or motion never reloads the file.
+- `web/src/components/EditorPane.tsx` — the view extensions include
+  `drawSelection()`: without it CodeMirror never renders its own `.cm-cursor`
+  element (only the browser's native caret is visible), so none of the cursor
+  CSS below has anything to style. The same theme also gives text selection
+  palette colors (sand tint, replacing the base theme's gray/lavender) and
+  forces `caret-color: transparent` on `.cm-content` — including the focused
+  state, where drawSelection's own rule would restore a native caret in the
+  text color.
 - `web/src/styles.css` — cursor rules keyed off those attributes: brick line
   (was pearl), block = brick at 55% over one `ch`, underline = 2px brick
   bottom border; smooth motion = 90ms transition on the cursor's inline
@@ -39,3 +47,11 @@ gear popover ("Editor settings"):
 Editor settings shows Cursor type + Smooth cursor motion; switching shape and
 motion applies live to the open file; cursor is brick in all three shapes;
 arrow keys / clicks glide when smooth is on, snap when off.
+
+Re-verification (2026-09-14): the user reported no red cursor after the first
+pass — root cause was the missing `drawSelection()` above (the styled element
+simply did not exist). Verified with a headless Chrome CDP session against
+127.0.0.1:5199: real mouse click focuses the editor, exactly one `.cm-cursor`
+element renders with computed `border-left-color: rgb(123, 22, 18)` (brick),
+the native caret computes to transparent, and a keyboard selection paints
+`rgba(179, 143, 111, 0.32)` (palette sand).
