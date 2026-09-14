@@ -39,6 +39,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
   syncRef.current = ctx.syncToPdf;
   const gotoRef = useRef(ctx.editorGoto);
   gotoRef.current = ctx.editorGoto;
+  const savedRef = useRef<(path: string) => void>(() => {});
+  savedRef.current = ctx.onFileSaved;
   const [viewTick, setViewTick] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +73,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
         if (!view) return;
         void api
           .writeFile(filePath, view.state.doc.toString())
-          .then(() => setDirty(false))
+          .then(() => {
+            setDirty(false);
+            savedRef.current(filePath); // auto-compile on save (M3)
+          })
           .catch((e) => setError(e instanceof Error ? e.message : String(e)));
       };
       saveRef.current = save;
