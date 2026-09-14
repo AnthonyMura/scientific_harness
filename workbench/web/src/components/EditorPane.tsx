@@ -3,7 +3,7 @@
 // shape (line/block/underline) and smooth motion are data attributes — live too.
 import React, { useEffect, useRef, useState } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView, drawSelection, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
@@ -39,9 +39,20 @@ function langForPath(p: string): Extension[] {
   return [];
 }
 
-/** Vesper chrome: the text cursor in brick, the palette's accent red. */
+/** Vesper chrome: the text cursor in brick (the palette's accent red).
+ *  drawSelection() makes CodeMirror render its own .cm-cursor element —
+ *  without it only the browser's native caret is visible and these rules
+ *  have nothing to style. Selection gets palette colors too, and the
+ *  native caret is hidden entirely (drawSelection's ":focus -> initial"
+ *  rule would otherwise let a second, text-colored caret show through). */
 const vesperChrome = EditorView.theme({
-  "& .cm-cursor": { borderLeftColor: "var(--brick)" },
+  "& .cm-cursor, & .cm-dropCursor": { borderLeftColor: "var(--brick)" },
+  "& .cm-selectionBackground": { background: "rgba(179, 143, 111, 0.25)" },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground": {
+    background: "rgba(179, 143, 111, 0.32)",
+  },
+  "& .cm-content": { caretColor: "transparent !important" },
+  "& .cm-content:focus": { caretColor: "transparent !important" },
 });
 
 interface Props {
@@ -107,6 +118,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
             highlightSelectionMatches(),
             bracketMatching(),
             syntaxHighlighting(vesperHighlight),
+            drawSelection(),
             vesperChrome,
             keymap.of([
               ...defaultKeymap,
