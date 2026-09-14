@@ -363,7 +363,10 @@ function GroupView({ id }: { id: string }) {
     e.preventDefault();
     const file = e.dataTransfer.getData(FILE_DRAG_MIME);
     if (file) {
-      if (ctx.projectOpen) dispatch({ type: "open", moduleId: "editor", params: { filePath: file }, groupId: id });
+      if (ctx.projectOpen) {
+        if (/\.pdf$/i.test(file)) ctx.onOpenPdf(file); // PDFs land in the PDF pane
+        else dispatch({ type: "open", moduleId: "editor", params: { filePath: file }, groupId: id });
+      }
       setOver(null);
       setDrag(null);
       return;
