@@ -2,7 +2,7 @@
 // the layout reducer; hands every module a shared AppCtx.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api, initApi } from "./api";
-import type { ActiveJob, Project, TargetStatus } from "./types";
+import type { ActiveJob, Project, SshConfig, TargetStatus } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
 import type { AppCtx, SyncRequest } from "./modules/ctx";
@@ -278,6 +278,19 @@ export default function App() {
     [project],
   );
 
+  const saveSsh = useCallback(
+    async (cfg: SshConfig) => {
+      if (!project) return;
+      try {
+        await api.setConfig({ project: { ssh: cfg } });
+        setProject((p) => (p ? { ...p, ssh: cfg } : p));
+      } catch (e) {
+        setBanner(errMsg(e));
+      }
+    },
+    [project],
+  );
+
   const startInstall = useCallback(async (target: string, distro?: string) => {
     try {
       const r = await api.startInstall(target, distro);
@@ -373,6 +386,7 @@ export default function App() {
         onAutoCompile={(on) => void setAutoCompile(on)}
         targetStatuses={targetStatuses}
         onTarget={(t) => void setTarget(t)}
+        onSaveSsh={(cfg) => void saveSsh(cfg)}
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
