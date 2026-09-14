@@ -1,6 +1,6 @@
 # 14 — Editor cursor: palette red, shapes, smooth motion, gear settings
 
-Status: claimed
+Status: resolved
 
 ## Scope
 
