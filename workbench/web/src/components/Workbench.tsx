@@ -420,6 +420,13 @@ function GroupView({ id }: { id: string }) {
       onDragOver={onDragOver}
       onDrop={onDrop}
       onDragLeave={onDragLeave}
+      onClick={() => {
+        // Clicking a pane activates it — that is what makes the Explorer's
+        // single-click open work. The Explorer selects files; it must not steal
+        // activation from the pane the user is reading in.
+        if (activeTab?.moduleId === "explorer") return;
+        dispatch({ type: "focus", groupId: id });
+      }}
     >
       <div className="tabstrip group-head">
         {tabs.map((t, i) => {
