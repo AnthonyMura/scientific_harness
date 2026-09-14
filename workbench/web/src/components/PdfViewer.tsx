@@ -1,6 +1,8 @@
 // PDF module: reads any project PDF in a single pane. Two modes —
-// "compiled output" (main.pdf from LaTeX, with SyncTeX and the compile
-// controls) and a static file opened from the Explorer (read-only, no sync).
+// "compiled output" (the main file's PDF from LaTeX, with SyncTeX, Save
+// version and Save As) and a static file opened from the Explorer (read-only,
+// no sync). The compile controls live in the editor pane header while a .tex
+// file is open; project settings (main file, target) live in the top bar.
 // Zoom is a module setting adjustable from the header. Pages keep their
 // natural size and the host scrolls in both directions; a transparent text
 // layer over each canvas makes the text selectable. SyncTeX (M3): a click in
@@ -13,8 +15,6 @@ import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
 import { forwardLookup, parseSynctex, reverseLookup } from "../modules/synctex";
 import type { SynctexData } from "../modules/synctex";
-import type { SshConfig } from "../types";
-import { COMPILE_TARGETS, hasWslTarget, installHint, needsInstall, targetTooltip } from "../modules/targets-ui";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
@@ -52,8 +52,13 @@ export default function PdfViewer({ ctx }: Props) {
   const [status, setStatus] = useState<string>("");
   const [synctexTick, setSynctexTick] = useState(0);
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
-  const [showSsh, setShowSsh] = useState(false);
-  const [draft, setDraft] = useState<SshConfig>({});
+  // Save version / Save As (v3): compiled PDFs are saved into the project as
+  // meaningful versions - this pane is the development process's output sink.
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [saveAsPath, setSaveAsPath] = useState("");
+  const [saveAsError, setSaveAsError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
   // pdfVersion when the static file was opened — a newer compile gets a chip.
   const versionAtOpenRef = useRef<number | null>(null);
 
@@ -76,7 +81,7 @@ export default function PdfViewer({ ctx }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const text = await api.fetchSynctex("main.synctex.gz");
+        const text = await api.fetchSynctex(ctx.pdfArtifact?.synctex ?? "main.synctex.gz");
         if (cancelled || !text) return;
         synctexRef.current = parseSynctex(text, ctx.projectRoot);
         setSynctexTick((t) => t + 1);
@@ -87,7 +92,7 @@ export default function PdfViewer({ ctx }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, pdfFile]);
+  }, [ctx.projectOpen, ctx.projectRoot, ctx.pdfVersion, ctx.pdfArtifact, pdfFile]);
 
   useEffect(() => {
     if (!ctx.projectOpen || !hostRef.current) return;
@@ -97,7 +102,8 @@ export default function PdfViewer({ ctx }: Props) {
       try {
         // Compiled output comes from the artifact endpoint; anything else is a
         // raw project file (the PDF library).
-        const blob = pdfFile ? await api.fetchRawFile(pdfFile) : await api.fetchPdf("main.pdf");
+        const artifact = ctx.pdfArtifact?.pdf ?? "main.pdf";
+        const blob = pdfFile ? await api.fetchRawFile(pdfFile) : await api.fetchPdf(artifact);
         if (cancelled) return;
         if (!blob) throw new Error(`could not read ${pdfFile}`);
         const data = await blob.arrayBuffer();
@@ -152,7 +158,7 @@ export default function PdfViewer({ ctx }: Props) {
       cancelled = true;
       for (const l of textLayers) l.cancel();
     };
-  }, [ctx.projectOpen, ctx.projectRoot, outputTick, zoom, pdfFile]);
+  }, [ctx.projectOpen, ctx.projectRoot, outputTick, zoom, pdfFile, ctx.pdfArtifact]);
 
   // Forward search (M3): editor click → scroll to the line + flash it.
   useEffect(() => {
@@ -251,14 +257,60 @@ export default function PdfViewer({ ctx }: Props) {
 
   const nudgeZoom = (d: number) => setSetting("zoom", Math.max(50, Math.min(300, zoom + d)));
 
-  const openSshForm = () => {
-    setDraft(ctx.project?.ssh ?? {});
-    setShowSsh(true);
+  /** One-click: copy the compiled output into versions/ as a timestamped version. */
+  const saveVersion = async () => {
+    const artifact = ctx.pdfArtifact?.pdf;
+    if (!artifact || saving) return;
+    setSaving(true);
+    try {
+      const r = await api.saveVersion(artifact);
+      setSavedNote(`saved ${r.path}`);
+      ctx.bumpTree(); // the versions/ folder shows up in the Explorer
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
   };
-  const saveSsh = () => {
-    ctx.onSaveSsh(draft);
-    setShowSsh(false);
+
+  const openSaveAs = () => {
+    if (pdfFile) {
+      const i = pdfFile.lastIndexOf("/");
+      const name = i === -1 ? pdfFile : pdfFile.slice(i + 1);
+      const dot = name.lastIndexOf(".");
+      const copyName = dot === -1 ? name + "-copy" : name.slice(0, dot) + "-copy" + name.slice(dot);
+      setSaveAsPath((i === -1 ? "" : pdfFile.slice(0, i + 1)) + copyName);
+    } else {
+      const stem = (ctx.pdfArtifact?.pdf ?? "main.pdf").replace(/\.pdf$/, "");
+      setSaveAsPath(stem + ".pdf");
+    }
+    setSaveAsError(null);
+    setSaveAsOpen(true);
   };
+
+  const doSaveAs = async () => {
+    const to = saveAsPath.trim();
+    if (!to || saving) return;
+    setSaving(true);
+    try {
+      const from = pdfFile ?? ".workbench/build/" + (ctx.pdfArtifact?.pdf ?? "main.pdf");
+      const r = await api.copyFile(from, to);
+      setSaveAsOpen(false);
+      setSavedNote(`saved ${r.to}`);
+      ctx.bumpTree();
+    } catch (e) {
+      setSaveAsError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // The "saved …" note fades out on its own.
+  useEffect(() => {
+    if (!savedNote) return;
+    const t = window.setTimeout(() => setSavedNote(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [savedNote]);
 
   const jobRunning = !!ctx.job && ctx.job.status === "running";
   // A compile finished while a static file was open → offer the fresh output.
@@ -288,15 +340,7 @@ export default function PdfViewer({ ctx }: Props) {
             )}
           </>
         ) : (
-          <>
-            <span>PDF preview</span>
-            {ctx.project && (
-              <label className="auto-compile" title="Compile automatically after saving a .tex file">
-                <input type="checkbox" checked={ctx.autoCompile} onChange={(e) => ctx.onAutoCompile(e.target.checked)} />
-                Auto-compile
-              </label>
-            )}
-          </>
+          <span>PDF preview</span>
         )}
         {status && <span className="muted">{status}</span>}
         {!pdfFile && compiling && <span className="chip running">compiling...</span>}
@@ -305,38 +349,30 @@ export default function PdfViewer({ ctx }: Props) {
             Compile failed - Run Log
           </button>
         )}
+        {savedNote && <span className="chip done" title="A copy was saved into the project">{savedNote}</span>}
         <span className="head-spacer" />
         {!pdfFile && ctx.project && (
-          <span className="target-pick">
-            <span className="target-label">Target</span>
-            <select
-              value={ctx.project.target}
-              onChange={(e) => ctx.onTarget(e.target.value)}
-              title={targetTooltip(ctx.project.target, ctx.targetStatuses)}
-            >
-              {!(COMPILE_TARGETS as readonly string[]).includes(ctx.project.target) && (
-                <option value={ctx.project.target} disabled>{ctx.project.target} — unavailable</option>
-              )}
-              <option value="auto">Auto</option>
-              <option value="local">Local (host TeX)</option>
-              {hasWslTarget(ctx.targetStatuses) && <option value="wsl">WSL</option>}
-              <option value="ssh">SSH (remote)</option>
-            </select>
-            {needsInstall(ctx.project.target, ctx.targetStatuses) && (
-              <button type="button" className="target-warn" title={installHint(ctx.project.target, ctx.targetStatuses)} onClick={() => ctx.onShowInstall()}>
-                TeX missing — install
-              </button>
-            )}
-            <button type="button" className="target-ssh" onClick={openSshForm} title="Configure the SSH compile target (host, user, key)">
-              SSH…
-            </button>
-          </span>
+          <button
+            type="button"
+            className="mini"
+            onClick={() => void saveVersion()}
+            disabled={saving}
+            title="Save this compiled output as a version in versions/ (timestamped, Overleaf-style)"
+          >
+            Save version
+          </button>
         )}
-        {!pdfFile && (jobRunning ? (
-          <button onClick={() => ctx.onCancelJob()} className="danger">Cancel</button>
-        ) : (
-          <button onClick={() => ctx.onCompile()} disabled={!ctx.projectOpen} className="primary">Compile</button>
-        ))}
+        {ctx.projectOpen && (
+          <button
+            type="button"
+            className="mini"
+            onClick={openSaveAs}
+            disabled={saving}
+            title={pdfFile ? "Copy this file to another path in the project" : "Save the compiled output as a file in the project"}
+          >
+            Save As…
+          </button>
+        )}
         <button type="button" className="mini" onClick={() => nudgeZoom(-25)} title="Zoom out">−</button>
         <span className="zoom-label" title="Zoom">{zoom}%</span>
         <button type="button" className="mini" onClick={() => nudgeZoom(25)} title="Zoom in">+</button>
@@ -364,55 +400,35 @@ export default function PdfViewer({ ctx }: Props) {
           onClose={() => setGearOpen(null)}
         />
       )}
-      {showSsh && ctx.project && (
-        <div className="ssh-form">
-          <h4>SSH compile target — {ctx.project.name}</h4>
-          <label>Host
-            <input
-              value={draft.host ?? ""}
-              onChange={(e) => setDraft({ ...draft, host: e.target.value })}
-              placeholder="labserver"
-            />
-          </label>
-          <label>User
-            <input
-              value={draft.user ?? ""}
-              onChange={(e) => setDraft({ ...draft, user: e.target.value })}
-              placeholder="alice"
-            />
-          </label>
-          <label>Port
-            <input
-              type="number"
-              min={1}
-              max={65535}
-              value={draft.port ?? 22}
-              onChange={(e) =>
-                setDraft({ ...draft, port: e.target.value === "" ? undefined : Number(e.target.value) })
-              }
-            />
-          </label>
-          <label>Key path
-            <input
-              value={draft.key ?? ""}
-              onChange={(e) => setDraft({ ...draft, key: e.target.value })}
-              placeholder="blank = default ssh keys"
-            />
-          </label>
-          <label>Remote dir
-            <input
-              value={draft.remote_dir ?? ""}
-              onChange={(e) => setDraft({ ...draft, remote_dir: e.target.value })}
-              placeholder={`~/workbench/${ctx.project.name}`}
-            />
-          </label>
-          <p className="ssh-form-note">
-            Key-based auth only (no password prompts). The project is synced up before each compile;
-            PDF + SyncTeX are pulled back. The remote machine needs TeX Live + latexmk.
-          </p>
-          <div className="ssh-form-actions">
-            <button className="primary" onClick={saveSsh} disabled={!draft.host || !draft.user}>Save</button>
-            <button onClick={() => setShowSsh(false)}>Cancel</button>
+      {saveAsOpen && ctx.project && (
+        <div className="modal-backdrop" onClick={() => setSaveAsOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="pane-header"><span>Save As</span></div>
+            <div className="modal-body">
+              <input
+                autoFocus
+                value={saveAsPath}
+                onChange={(e) => setSaveAsPath(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void doSaveAs();
+                }}
+                placeholder="versions/main.pdf"
+              />
+              <div className="muted">
+                {pdfFile ? (
+                  <>Copy <code>{pdfFile}</code> to the path below. Existing files are not overwritten.</>
+                ) : (
+                  <>Save the compiled output (<code>.workbench/build/{ctx.pdfArtifact?.pdf ?? "main.pdf"}</code>) as a project file. Existing files are not overwritten.</>
+                )}
+              </div>
+              {saveAsError && <div className="tree-error">{saveAsError}</div>}
+              <div className="card-actions">
+                <button onClick={() => setSaveAsOpen(false)}>Cancel</button>
+                <button className="primary" disabled={!saveAsPath.trim() || saving} onClick={() => void doSaveAs()}>
+                  Save
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
