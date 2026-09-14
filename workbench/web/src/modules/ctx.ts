@@ -29,6 +29,10 @@ export interface AppCtx {
   onShowMainPdf: () => void;
   /** Start a manual compile of the project's main file. */
   onCompile: () => void;
+  /** Start a manual compile of a specific .tex file (the editor's picker). */
+  onCompileFile: (file: string) => void;
+  /** Persist the project's main .tex file (chosen from the file list, Overleaf-style). */
+  onSaveMainFile: (file: string) => void;
   autoCompile: boolean;
   onAutoCompile: (on: boolean) => void;
   targetStatuses: TargetStatus[] | null;
@@ -58,4 +62,14 @@ export interface AppCtx {
   syncToEditor: (file: string, line: number) => void;
   /** A file was saved in the editor (auto-compile on save, M3). */
   onFileSaved: (path: string) => void;
+  /** All .tex files in the project (compile picker + main-file setting); null while loading. */
+  texFiles: string[] | null;
+  /** Re-fetch the .tex list (after create/rename/delete in the Explorer). */
+  refreshTexFiles: () => void;
+  /** Artifact names of the current compiled output (derived from the main file before any compile). */
+  pdfArtifact: { pdf: string; synctex: string } | null;
+  /** Bumped when project files change externally - the Explorer reloads its tree. */
+  treeTick: number;
+  /** Ask the Explorer to reload its tree (after Save version / Save As in the PDF pane). */
+  bumpTree: () => void;
 }

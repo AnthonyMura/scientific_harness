@@ -81,6 +81,11 @@ export const api = {
   renamePath: (from: string, to: string) =>
     request<{ from: string; to: string }>("POST", "/api/files/rename", { from, to }),
   deletePath: (path: string) => request<{ ok: boolean }>("POST", "/api/files/delete", { path }),
+  /** All .tex files in the project - for the compile picker and main-file setting. */
+  texFiles: () => request<{ files: string[] }>("GET", "/api/files/tex"),
+  /** Copy a project file to another project path (Save As / duplicate). */
+  copyFile: (from: string, to: string) =>
+    request<{ from: string; to: string }>("POST", "/api/files/copy", { from, to }),
 
   /** Raw file bytes for image previews; null when the backend refuses (413/415). */
   fetchFileBytes: async (path: string): Promise<Blob | null> => {
@@ -134,6 +139,10 @@ export const api = {
     if (!res.ok) return null; // no synctex artifact yet — sync stays disabled
     return res.text();
   },
+
+  /** Save the compiled PDF as a version in the project's versions/ folder. */
+  saveVersion: (artifact: string, name?: string) =>
+    request<{ path: string }>("POST", "/api/artifacts/save-version", { artifact, name }),
 
   getConfig: () => request<ConfigResponse>("GET", "/api/config"),
   setConfig: (body: Partial<ConfigResponse>) =>
