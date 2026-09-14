@@ -1,12 +1,17 @@
-// Top bar: project actions only. The LaTeX compile controls (compile,
-// auto-compile, target picker, SSH form) live in the PDF pane header —
-// the "LaTeX container" of the workbench.
+// Top bar: project actions + project settings (Overleaf-style: main file,
+// compile target, auto-compile). The LaTeX Compile button itself lives in
+// the editor pane header while a .tex file is open.
+import { useState } from "react";
 import type { Project } from "../types";
+import type { AppCtx } from "../modules/ctx";
+import ProjectSettingsMenu from "./ProjectSettingsMenu";
+import { GearIcon } from "../icons";
 
 interface Props {
   project: Project | null;
   recent: Project[];
   devMode: boolean;
+  ctx: AppCtx;
   onOpenFolder: () => void;
   onNewProject: () => void;
   onPickRecent: (p: Project) => void;
@@ -15,10 +20,11 @@ interface Props {
 }
 
 export default function ProjectBar({
-  project, recent, devMode,
+  project, recent, devMode, ctx,
   onOpenFolder, onNewProject, onPickRecent,
   showInstall, onToggleInstall,
 }: Props) {
+  const [settingsOpen, setSettingsOpen] = useState<{ x: number; y: number } | null>(null);
   return (
     <div className="topbar">
       <span className="brand">Scientific Harness</span>
@@ -38,13 +44,29 @@ export default function ProjectBar({
         ))}
       </select>
       {project && (
-        <span className="proj-name" title={project.root}>{project.name}</span>
+        <>
+          <span className="proj-name" title={project.root}>{project.name}</span>
+          <button
+            type="button"
+            className="head-gear"
+            title="Project settings — main file, compile target, auto-compile"
+            onClick={(e) => {
+              const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              setSettingsOpen({ x: r.right, y: r.bottom + 4 });
+            }}
+          >
+            <GearIcon size={14} />
+          </button>
+        </>
       )}
       <span className="spacer" />
       {devMode && <span className="badge">browser dev mode</span>}
       <button onClick={onToggleInstall} className={showInstall ? "active" : ""}>
         Install TeX
       </button>
+      {settingsOpen && project && (
+        <ProjectSettingsMenu x={settingsOpen.x} y={settingsOpen.y} ctx={ctx} onClose={() => setSettingsOpen(null)} />
+      )}
     </div>
   );
 }

@@ -27,6 +27,12 @@ export default function App() {
   const [banner, setBanner] = useState<string | null>(null);
   /** Static PDF open in the PDF pane (null = compiled main.pdf output). */
   const [pdfFile, setPdfFile] = useState<string | null>(null);
+  /** Project .tex files for the compile picker and the main-file setting. */
+  const [texFiles, setTexFiles] = useState<string[] | null>(null);
+  /** Artifact names from the last successful compile (null = derive from the main file). */
+  const [artifactNames, setArtifactNames] = useState<{ pdf: string; synctex: string } | null>(null);
+  /** Bumped when project files change externally - the Explorer reloads its tree. */
+  const [treeTick, setTreeTick] = useState(0);
   // Compile-target selector (M3): probe results + a tick that re-probes
   // after every install job settles.
   const [targetStatuses, setTargetStatuses] = useState<TargetStatus[] | null>(null);
@@ -53,6 +59,29 @@ export default function App() {
   // A statically opened PDF belongs to the previous project's tree.
   useEffect(() => {
     setPdfFile(null);
+  }, [project?.root]);
+
+  // Project switched (or opened): refresh the .tex list and drop stale artifact
+  // names so the PDF pane follows the new main file's output.
+  useEffect(() => {
+    setArtifactNames(null);
+    if (!project) {
+      setTexFiles(null);
+      return;
+    }
+    let alive = true;
+    void api
+      .texFiles()
+      .then((r) => {
+        if (alive) setTexFiles(r.files);
+      })
+      .catch(() => {
+        if (alive) setTexFiles([]);
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project?.root]);
 
   /** Open (or focus) the default set of modules for a project. */
@@ -106,7 +135,13 @@ export default function App() {
           finishedRef.current = jobId;
           if (snap.kind === "compile") {
             compilingRef.current = false;
-            if (snap.artifacts.pdf) setPdfVersion((v) => v + 1);
+            if (snap.artifacts.pdf) {
+              setPdfVersion((v) => v + 1);
+              // Remember which artifact the compile produced - the PDF pane fetches
+              // by these names (the main file need not be main.tex).
+              const synctex = snap.artifacts.synctex || snap.artifacts.pdf.replace(/\.pdf$/, ".synctex.gz");
+              setArtifactNames({ pdf: snap.artifacts.pdf, synctex });
+            }
             // A failed compile keeps the old PDF — bring the log forward so the
             // reason is visible instead of hidden behind the PDF tab.
             if (snap.status !== "done") dispatch({ type: "open", moduleId: "log" });
@@ -256,26 +291,27 @@ export default function App() {
     finishedRef.current = null;
     activeJobIdRef.current = id;
     dispatch({ type: "open", moduleId: "log" }); // show the run log while a job runs
-    if (kind === "compile") openPdfPane(); // compile controls live in the PDF pane
+    if (kind === "compile") openPdfPane(); // show the output next to the editing surface
     setJob({ id, kind, label, status: "running", exit_code: null, logLines: [], errors: [], artifacts: {} });
   };
 
-  const compile = async (auto = false) => {
+  const compile = async (auto = false, file?: string) => {
     if (!project || compilingRef.current) return;
+    const mainFile = file || project.main_file;
     compilingRef.current = true;
     try {
-      const r = await api.startCompile(project.main_file, project.target);
+      const r = await api.startCompile(mainFile, project.target);
       beginJob(
         r.job_id,
         "compile",
-        auto ? `auto-compiling ${project.name} after save` : `compiling ${project.name}`,
+        auto ? `auto-compiling ${mainFile} after save` : `compiling ${mainFile}`,
       );
     } catch (e) {
       compilingRef.current = false; // start failed — allow a retry
       setBanner(errMsg(e));
     }
   };
-  const compileRef = useRef<(auto?: boolean) => Promise<void>>(() => Promise.resolve());
+  const compileRef = useRef<(auto?: boolean, file?: string) => Promise<void>>(() => Promise.resolve());
   compileRef.current = compile;
 
   /** A .tex file was saved: kick off (or queue) an auto-compile. */
@@ -318,6 +354,21 @@ export default function App() {
     [project],
   );
 
+  /** Persist the main .tex file (Overleaf-style: chosen from the project's files). */
+  const setMainFile = useCallback(
+    async (file: string) => {
+      if (!project || !file) return;
+      try {
+        await api.setConfig({ project: { main_file: file } });
+        setProject((p) => (p ? { ...p, main_file: file } : p));
+        setArtifactNames(null); // the PDF pane follows the new main file's output
+      } catch (e) {
+        setBanner(errMsg(e));
+      }
+    },
+    [project],
+  );
+
   const saveSsh = useCallback(
     async (cfg: SshConfig) => {
       if (!project) return;
@@ -350,6 +401,16 @@ export default function App() {
       setBanner(errMsg(e));
     }
   }, []);
+
+  const refreshTexFiles = useCallback(async () => {
+    try {
+      setTexFiles((await api.texFiles()).files);
+    } catch {
+      // keep the old list - the picker stays usable
+    }
+  }, []);
+
+  const bumpTree = useCallback(() => setTreeTick((t) => t + 1), []);
 
   // --- module context -----------------------------------------------------
 
@@ -434,6 +495,15 @@ export default function App() {
     [onOpenFile],
   );
 
+  /** Artifact names the PDF pane should fetch: the last compile's output, or
+   *  the main file's expected output before any compile has run. */
+  const pdfArtifact = useMemo(() => {
+    if (artifactNames) return artifactNames;
+    if (!project) return null;
+    const stem = project.main_file.slice(0, project.main_file.lastIndexOf(".")) || project.main_file;
+    return { pdf: stem + ".pdf", synctex: stem + ".synctex.gz" };
+  }, [artifactNames, project]);
+
   const ctx: AppCtx = useMemo(
     () => ({
       projectOpen: !!project,
@@ -445,6 +515,13 @@ export default function App() {
       onOpenPdf,
       onShowMainPdf,
       onCompile: () => void compile(),
+      onCompileFile: (f) => void compile(false, f),
+      onSaveMainFile: (f) => void setMainFile(f),
+      texFiles,
+      refreshTexFiles: () => void refreshTexFiles(),
+      pdfArtifact,
+      treeTick,
+      bumpTree,
       autoCompile: !!project?.auto_compile,
       onAutoCompile: (on) => void setAutoCompile(on),
       targetStatuses,
@@ -466,7 +543,7 @@ export default function App() {
       onFileSaved,
     }),
     [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
-     setAutoCompile, setTarget, saveSsh,
+     setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
   );
@@ -477,6 +554,7 @@ export default function App() {
         project={project}
         recent={recent}
         devMode={devMode}
+        ctx={ctx}
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
