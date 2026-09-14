@@ -197,6 +197,37 @@ function removeTab(nodes: Record<string, Node>, groupId: string, tabId: string):
   return { ...nodes, [groupId]: { ...g, tabs, active } };
 }
 
+/**
+ * Remove an empty non-root group and promote its sibling to take its place in
+ * the parent split (collapsing the split when it was the root). Pure structure
+ * — callers own focus. A fullscreen pointer at the removed group is cleared.
+ */
+function collapseEmptyGroup(state: LayoutState, groupId: string): LayoutState {
+  const g = state.nodes[groupId];
+  if (!isGroup(g) || g.tabs.length > 0 || groupId === state.rootId) return state;
+  const p = findParent(state.nodes, state.rootId, groupId);
+  if (!p) return state;
+  const siblingId = p.split.a === groupId ? p.split.b : p.split.a;
+  if (!state.nodes[siblingId]) return state;
+  let nodes = { ...state.nodes };
+  delete nodes[groupId];
+  delete nodes[p.split.id];
+  let rootId = state.rootId;
+  if (p.split.id === rootId) {
+    rootId = siblingId;
+  } else {
+    const gp = findParent(nodes, rootId, p.split.id);
+    if (!gp) return state;
+    nodes[gp.split.id] = { ...gp.split, [gp.which]: siblingId };
+  }
+  return {
+    ...state,
+    nodes,
+    rootId,
+    fullscreen: state.fullscreen === groupId ? null : state.fullscreen,
+  };
+}
+
 /** Where a freshly opened module lands: explicit group > remembered home > slot group. */
 function openTargetGroup(state: LayoutState, moduleId: string, explicit?: string): string | null {
   const def = MODULE_DEFS[moduleId];
@@ -266,12 +297,23 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
     case "close": {
       const g = groupOfTab(state, action.tabId);
       if (!g) return state;
-      return {
+      let next: LayoutState = {
         ...state,
         tabs: omit(state.tabs, action.tabId),
         nodes: removeTab(state.nodes, g, action.tabId),
         lastEditor: state.lastEditor === action.tabId ? null : state.lastEditor,
       };
+      // Closing the pane's last tab empties it — collapse the split (root kept).
+      const emptied = isGroup(next.nodes[g]) && next.nodes[g].tabs.length === 0;
+      if (emptied) {
+        next = collapseEmptyGroup(next, g);
+        if (!next.nodes[g] && state.focusedGroup === g) {
+          const p = findParent(state.nodes, state.rootId, g);
+          const siblingId = p ? (p.split.a === g ? p.split.b : p.split.a) : null;
+          next = { ...next, focusedGroup: siblingId && isGroup(next.nodes[siblingId]) ? siblingId : firstGroupId(next) };
+        }
+      }
+      return next;
     }
 
     case "move": {
@@ -282,13 +324,16 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
       if (from && from !== action.groupId) nodes = removeTab(nodes, from, action.tabId);
       nodes = insertTabAt(nodes, action.groupId, action.tabId, action.index);
       nodes = setGroupActive(nodes, action.groupId, action.tabId);
-      return {
+      let next: LayoutState = {
         ...state,
         nodes,
         focusedGroup: action.groupId,
         homes: { ...state.homes, [tab.moduleId]: action.groupId },
         lastEditor: tab.moduleId === "editor" ? action.tabId : state.lastEditor,
       };
+      // Moving a pane's last tab out empties it — collapse the split (root kept).
+      if (from && from !== action.groupId) next = collapseEmptyGroup(next, from);
+      return next;
     }
 
     case "split": {
@@ -321,6 +366,7 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
         rootId = state.rootId;
       }
       let next: LayoutState = { ...state, nodes, rootId, focusedGroup: newGroup.id };
+      let emptiedFrom: string | null = null;
       if (action.withTabId && next.tabs[action.withTabId]) {
         const tabId = action.withTabId;
         const from = groupOfTab(next, tabId);
@@ -335,7 +381,10 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
           homes: { ...next.homes, [t.moduleId]: newGroup.id },
           lastEditor: t.moduleId === "editor" ? tabId : next.lastEditor,
         };
+        if (from) emptiedFrom = from;
       }
+      // Dragging a pane's only tab to an edge leaves the origin empty — collapse it.
+      if (emptiedFrom && emptiedFrom !== newGroup.id) next = collapseEmptyGroup(next, emptiedFrom);
       // A module dragged from the activity bar lands in the fresh pane.
       if (action.withModuleId) {
         const def = MODULE_DEFS[action.withModuleId];
@@ -355,20 +404,9 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
       const p = findParent(state.nodes, state.rootId, action.groupId);
       if (!p) return state;
       const siblingId = p.split.a === action.groupId ? p.split.b : p.split.a;
-      const sibling = state.nodes[siblingId];
-      if (!sibling) return state;
-      let nodes = { ...state.nodes };
-      delete nodes[action.groupId];
-      delete nodes[p.split.id];
-      let rootId = state.rootId;
-      if (p.split.id === rootId) {
-        rootId = siblingId;
-      } else {
-        const gp = findParent(nodes, rootId, p.split.id);
-        if (!gp) return state;
-        nodes[gp.split.id] = { ...gp.split, [gp.which]: siblingId };
-      }
-      return { ...state, nodes, rootId, focusedGroup: isGroup(nodes[siblingId]) ? siblingId : null };
+      const next = collapseEmptyGroup(state, action.groupId);
+      if (next === state) return state;
+      return { ...next, focusedGroup: isGroup(next.nodes[siblingId]) ? siblingId : null };
     }
 
     case "resize": {
