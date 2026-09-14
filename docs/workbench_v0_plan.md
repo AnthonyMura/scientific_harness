@@ -115,7 +115,7 @@ The full default main.tex is in appendix A so the look can be judged before buil
 - **M3 polish.** Reverse SyncTeX (PDF to source), auto-compile on save, recent projects, image preview in the tree, compile target selector UI with per-target install hints. Acceptance: the full definition of done from section 1. — **in progress**
 - **M4 remote.** ssh target: key-based auth, project sync up, compile on the remote machine, pull back PDF + synctex + log. Acceptance: compile a project against a machine on the LAN; artifacts appear in the app and sync works against the remote paths.
 
-> Progress (September 2026): M0–M2 done, M3 in progress — SyncTeX both directions (`.scratch/module-workbench/issues/08-synctex.md`) and auto-compile on save (`.scratch/module-workbench/issues/09-auto-compile-on-save.md`) are complete; remaining M3 items: image preview in the tree, compile target selector UI with install hints. Shipped beyond the original plan: the VSCode-style split-tree layout (`.scratch/module-workbench/issues/05-vscode-style-layout.md`) and the in-app TinyTeX (`.scratch/module-workbench/issues/06-in-app-tex.md`).
+> Progress (September 2026): M0–M2 done, M3 in progress — SyncTeX both directions (`.scratch/module-workbench/issues/08-synctex.md`), auto-compile on save (`.scratch/module-workbench/issues/09-auto-compile-on-save.md`) and image preview in the tree (`.scratch/module-workbench/issues/10-image-preview-in-tree.md`) are complete; remaining M3 item: compile target selector UI with install hints. Shipped beyond the original plan: the VSCode-style split-tree layout (`.scratch/module-workbench/issues/05-vscode-style-layout.md`) and the in-app TinyTeX (`.scratch/module-workbench/issues/06-in-app-tex.md`).
 
 ## 10. Relation to v3
 
