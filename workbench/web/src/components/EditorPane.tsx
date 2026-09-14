@@ -86,6 +86,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
+  /** Which .tex file the Compile button builds (per tab; defaults to the main file). */
+  const [pick, setPick] = useState<string>("");
 
   /** Select a whole line and center it in the viewport (inverse search). */
   const applyGoto = (view: EditorView, lineNo: number) => {
@@ -189,6 +191,21 @@ export default function EditorPane({ ctx, filePath }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.editorGoto, filePath, viewTick]);
 
+  // The compile controls are LaTeX-only: shown when this tab is a .tex file.
+  const isTex = !!filePath && filePath.endsWith(".tex");
+
+  // Keep the picker valid and defaulted to the project's main file.
+  useEffect(() => {
+    if (!isTex) return;
+    const files = ctx.texFiles ?? [];
+    if (pick && files.includes(pick)) return;
+    const main = ctx.project?.main_file ?? "";
+    setPick(files.includes(main) ? main : files[0] ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isTex, ctx.texFiles, ctx.project?.main_file]);
+
+  const jobRunning = !!ctx.job && ctx.job.status === "running";
+
   const fs = typeof settings.fontSize === "number" ? settings.fontSize : 15;
   const lh = typeof settings.lineHeight === "number" ? settings.lineHeight : 1.7;
   // Cursor shape + smooth motion apply live via data attributes (no view recreation).
@@ -214,6 +231,27 @@ export default function EditorPane({ ctx, filePath }: Props) {
           </button>
         )}
         <span className="head-spacer" />
+        {isTex && ctx.projectOpen && (
+          <span className="compile-pick">
+            <span>Compile</span>
+            <select
+              value={pick}
+              onChange={(e) => setPick(e.target.value)}
+              title="Which .tex file the Compile button builds"
+            >
+              {(ctx.texFiles ?? []).map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            {jobRunning ? (
+              <button className="danger" onClick={() => ctx.onCancelJob()}>Cancel</button>
+            ) : (
+              <button className="primary" onClick={() => pick && ctx.onCompileFile(pick)} disabled={!pick}>
+                Compile
+              </button>
+            )}
+          </span>
+        )}
         <button
           type="button"
           className="head-gear"
