@@ -82,6 +82,16 @@ export const api = {
     request<{ from: string; to: string }>("POST", "/api/files/rename", { from, to }),
   deletePath: (path: string) => request<{ ok: boolean }>("POST", "/api/files/delete", { path }),
 
+  /** Raw file bytes for image previews; null when the backend refuses (413/415). */
+  fetchFileBytes: async (path: string): Promise<Blob | null> => {
+    const c = apiConfig();
+    const res = await fetch(`${c.baseUrl}/api/files/raw?path=${encodeURIComponent(path)}`, {
+      headers: { "X-Workbench-Token": c.token },
+    });
+    if (!res.ok) return null;
+    return res.blob();
+  },
+
   startCompile: (main_file?: string, target?: string) =>
     request<{ job_id: string }>("POST", "/api/compile/start", { main_file, target }),
   jobStatus: (jobId: string, since = 0) =>

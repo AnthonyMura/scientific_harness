@@ -156,7 +156,13 @@ export const DownloadIcon = (p: IconProps) => (
   </Svg>
 );
 
-const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
+export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
+
+/** True for file names with a known image extension (tree thumbnails, M3). */
+export function isImageName(name: string): boolean {
+  const n = name.toLowerCase();
+  return IMAGE_EXTS.some((e) => n.endsWith(e));
+}
 
 /** Explorer tree icon for a file-system entry, colored by type. */
 export function entryIcon(name: string, isDir: boolean, expanded: boolean): React.ReactNode {
@@ -167,6 +173,6 @@ export function entryIcon(name: string, isDir: boolean, expanded: boolean): Reac
   if (n.endsWith(".tex")) return <FileIcon className="ic-tex" />;
   if (n.endsWith(".md") || n.endsWith(".markdown")) return <FileTextIcon className="ic-md" />;
   if (n.endsWith(".pdf")) return <FileIcon className="ic-pdf" />;
-  if (IMAGE_EXTS.some((e) => n.endsWith(e))) return <FileIcon className="ic-img" />;
+  if (isImageName(n)) return <FileIcon className="ic-img" />;
   return <FileIcon className="ic-file" />;
 }
