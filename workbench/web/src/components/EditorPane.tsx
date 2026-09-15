@@ -41,6 +41,9 @@ export const EDITOR_DEFAULTS: ModuleSettings = {
   cursorLineWidth: 1.2, smoothCursor: true,
 };
 
+/** Autosave debounce: the disk follows the last keystroke after this pause. */
+const AUTO_SAVE_MS = 1000;
+
 /** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX;
  *  anything else (.txt, .bib, .json, ...) opens as plain text. */
 function langForPath(p: string): Extension[] {
@@ -107,24 +110,47 @@ export default function EditorPane({ ctx, filePath }: Props) {
     if (!filePath || !hostRef.current) return;
     let cancelled = false;
     let view: EditorView | null = null;
+    // Autosave debounce timer (effect-level so the cleanup can cancel it).
+    let autoTimer: number | null = null;
     (async () => {
       const r = await api.readFile(filePath);
       if (cancelled || !hostRef.current) return;
       const lang = langForPath(filePath);
-      const save = async (notify = true): Promise<boolean> => {
-        if (!view) return true; // nothing loaded — nothing to persist
-        try {
-          await api.writeFile(filePath, view.state.doc.toString());
-          setDirty(false);
-          dirtyRef.current = false;
-          if (notify) savedRef.current(filePath); // auto-compile on save (M3)
-          return true;
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-          return false;
-        }
+      // Writes serialize through a chain so an unmount flush can never race an
+      // in-flight write (an older payload must not land after a newer one).
+      let writeChain: Promise<unknown> = Promise.resolve();
+      const save = (notify = true): Promise<boolean> => {
+        if (!view) return Promise.resolve(true); // nothing loaded — nothing to persist
+        const v = view; // stable handle for the callbacks below
+        const content = v.state.doc.toString(); // captured now, written later
+        const op = writeChain.then(() =>
+          api.writeFile(filePath, content).then(
+            () => {
+              // Only clear the dirty dot if the doc has not moved on mid-write.
+              if (v.state.doc.toString() === content) {
+                setDirty(false);
+                dirtyRef.current = false;
+              }
+              if (notify) savedRef.current(filePath); // auto-compile on save (M3)
+              return true;
+            },
+            (e: unknown) => {
+              setError(e instanceof Error ? e.message : String(e));
+              return false;
+            },
+          ),
+        );
+        writeChain = op.then((): undefined => undefined, (): undefined => undefined);
+        return op;
       };
       saveRef.current = save;
+      const scheduleAutoSave = () => {
+        if (autoTimer != null) window.clearTimeout(autoTimer);
+        autoTimer = window.setTimeout(() => {
+          autoTimer = null;
+          void save(); // same semantics as a manual save (auto-compile coalesces)
+        }, AUTO_SAVE_MS);
+      };
       const tabSize = typeof settings.tabSize === "number" ? settings.tabSize : 4;
       const wrap = !!settings.wrap;
       view = new EditorView({
@@ -165,6 +191,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
               if (u.docChanged) {
                 setDirty(true);
                 dirtyRef.current = true;
+                scheduleAutoSave(); // autosave: disk follows the last keystroke
               }
             }),
           ],
@@ -181,10 +208,15 @@ export default function EditorPane({ ctx, filePath }: Props) {
     });
     return () => {
       cancelled = true;
+      if (autoTimer != null) window.clearTimeout(autoTimer);
+      // Closing or switching away must not silently discard unsaved edits —
+      // flush them (chained after any in-flight write) before the view goes.
+      const flush = dirtyRef.current ? saveRef.current() : null;
       view?.destroy();
       if (viewRef.current === view) viewRef.current = null;
       setDirty(false);
       dirtyRef.current = false;
+      void flush;
     };
     // tabSize/wrap recreate the view; fontSize/lineHeight are live CSS vars.
     // projectRoot: switching projects must reload even for identical file names.
@@ -197,9 +229,22 @@ export default function EditorPane({ ctx, filePath }: Props) {
   useEffect(() => {
     if (!filePath) return;
     let alive = true;
-    const unregister = registerEditorSave(filePath, () =>
-      alive && dirtyRef.current ? saveRef.current(false) : Promise.resolve(true),
-    );
+    const unregister = registerEditorSave(filePath, {
+      get dirty() {
+        return alive && dirtyRef.current;
+      },
+      run: () => (alive && dirtyRef.current ? saveRef.current(false) : Promise.resolve(true)),
+      flush: () => {
+        if (!alive || !dirtyRef.current) return; // nothing pending
+        const v = viewRef.current;
+        if (!v) return;
+        // Claim the write first: both teardown events fire, and a keepalive
+        // request cannot report success back before the page is gone.
+        dirtyRef.current = false;
+        setDirty(false);
+        api.flushFile(filePath, v.state.doc.toString());
+      },
+    });
     return () => {
       alive = false;
       unregister();
