@@ -268,8 +268,8 @@ export default function FileExplorer({ ctx }: Props) {
       toggle(e.path); // single click: select + expand/collapse folders
     } else if (/\.pdf$/i.test(e.name)) {
       ctx.onOpenPdf(e.path); // PDFs open read-only in the PDF pane
-    } else if (ctx.editorFocused) {
-      ctx.onOpenFile(e.path); // editor activated: a single click opens the file
+    } else if (ctx.editorFocused || !ctx.anyEditorOpen) {
+      ctx.onOpenFile(e.path); // editor activated, or no editor open: a single click opens the file
     }
   }
 
