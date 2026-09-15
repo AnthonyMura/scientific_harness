@@ -30,6 +30,8 @@ export interface AppCtx {
   activeFile: string | null;
   /** True when the focused pane's active tab is an editor tab — a single click in the Explorer opens files. */
   editorFocused: boolean;
+  /** True when any editor tab is open — with none open, a single click in the Explorer also opens files. */
+  anyEditorOpen: boolean;
   /** The open project (null when none) — pane headers need its config. */
   project: Project | null;
   /** Project-relative path of a static PDF shown in the PDF pane (null = compiled main.pdf). */
