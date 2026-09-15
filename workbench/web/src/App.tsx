@@ -89,12 +89,11 @@ export default function App() {
   }, [project?.root]);
 
   /** Open (or focus) the default set of modules for a project. */
-  // Default template: explorer in the sidebar, editor in the center pane; PDF,
-  // Run Log and Install open on demand into their home panes (bottom panel).
-  const openDefaultTabs = useCallback((p: Project | null) => {
+  // Default template: only the explorer opens - no file is opened automatically;
+  // files land in the editor when picked from the tree. PDF, Run Log and Install
+  // open on demand into their home panes (bottom panel).
+  const openDefaultTabs = useCallback(() => {
     dispatch({ type: "open", moduleId: "explorer" });
-    if (p) dispatch({ type: "open", moduleId: "editor", params: { filePath: p.main_file } });
-    else dispatch({ type: "open", moduleId: "editor" });
   }, []);
 
   const bootLayout = useCallback(
@@ -102,7 +101,7 @@ export default function App() {
       const persisted = loadPersistedLayout();
       const keepTabs = p !== null && persisted.root === p.root && Object.keys(persisted.state.tabs).length > 0;
       if (!keepTabs) dispatch({ type: "resetTabs" });
-      openDefaultTabs(p);
+      openDefaultTabs();
     },
     [openDefaultTabs],
   );
@@ -120,7 +119,7 @@ export default function App() {
         bootLayout(cur.project ?? null);
       } catch (e) {
         setBanner("Cannot reach the workbench backend — " + errMsg(e));
-        openDefaultTabs(null);
+        openDefaultTabs();
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -208,7 +207,7 @@ export default function App() {
       const p = await api.openProject(path);
       setProject(p);
       dispatch({ type: "resetTabs" });
-      openDefaultTabs(p);
+      openDefaultTabs();
       void refreshRecent();
     } catch (e) {
       setBanner(errMsg(e));
@@ -241,7 +240,7 @@ export default function App() {
       const p = await api.newProject(name);
       setProject(p);
       dispatch({ type: "resetTabs" });
-      openDefaultTabs(p);
+      openDefaultTabs();
       setShowNew(false);
       setNewName("");
       void refreshRecent();
@@ -255,7 +254,7 @@ export default function App() {
       const opened = await api.openProject(p.root);
       setProject(opened);
       dispatch({ type: "resetTabs" });
-      openDefaultTabs(opened);
+      openDefaultTabs();
     } catch (e) {
       setBanner(errMsg(e));
     }
@@ -471,6 +470,9 @@ export default function App() {
     return layout.tabs[g.active]?.moduleId === "editor";
   }, [layout]);
 
+  /** Whether any editor tab exists — drives the Explorer's single-click open. */
+  const anyEditorOpen = useMemo(() => Object.values(layout.tabs).some((t) => t.moduleId === "editor"), [layout]);
+
   const onOpenFile = useCallback((path: string) => {
     // Reuse the focused pane's empty editor tab instead of stacking a second one.
     const st = layoutRef.current;
@@ -550,6 +552,7 @@ export default function App() {
       projectRoot: project?.root ?? null,
       activeFile,
       editorFocused,
+      anyEditorOpen,
       project,
       pdfFile,
       onOpenPdf,
@@ -583,7 +586,7 @@ export default function App() {
       onFileSaved,
       registerEditorSave,
     }),
-    [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
+    [project, activeFile, editorFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
      setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave],
