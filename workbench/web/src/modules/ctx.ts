@@ -1,6 +1,17 @@
 // Shared application context handed to every module render.
 import type { ActiveJob, Project, SshConfig, TargetStatus } from "../types";
 
+/** Save state of one open editor tab: Compile persists edits before building,
+ *  and the page-unload guard flushes them with keepalive requests. */
+export interface EditorSaveHandle {
+  /** True while the tab has unsaved edits. */
+  readonly dirty: boolean;
+  /** Persist the tab's current content (no-op when clean); true on success. */
+  run: () => Promise<boolean>;
+  /** Best-effort persist for page teardown (keepalive, fire-and-forget). */
+  flush: () => void;
+}
+
 /** One-way sync request between editor and PDF (SyncTeX, M3). */
 export interface SyncRequest {
   /** Project-relative file path, e.g. "main.tex". */
@@ -63,8 +74,9 @@ export interface AppCtx {
   /** A file was saved in the editor (auto-compile on save, M3). */
   onFileSaved: (path: string) => void;
   /** Editor tabs register their save here so Compile can persist open edits
-   *  before building (a compile reads from disk). Returns an unregister fn. */
-  registerEditorSave: (filePath: string, save: () => Promise<boolean>) => () => void;
+   *  before building (a compile reads from disk) and the unload guard can flush
+   *  them. Returns an unregister fn. */
+  registerEditorSave: (filePath: string, save: EditorSaveHandle) => () => void;
   /** All .tex files in the project (compile picker + main-file setting); null while loading. */
   texFiles: string[] | null;
   /** Re-fetch the .tex list (after create/rename/delete in the Explorer). */

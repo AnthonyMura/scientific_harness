@@ -76,6 +76,21 @@ export const api = {
     ),
   writeFile: (path: string, content: string) =>
     request<{ path: string; bytes: number }>("PUT", "/api/files/write", { path, content }),
+  /** Fire-and-forget write that survives page teardown (beforeunload/pagehide):
+   *  keepalive is the only request type Chrome lets finish after unload begins.
+   *  Bodies are capped at 64 KB by the platform; a larger doc loses at most the
+   *  sub-second of typing since the last autosave. */
+  flushFile: (path: string, content: string): void => {
+    try {
+      const c = apiConfig();
+      void fetch(`${c.baseUrl}/api/files/write`, {
+        method: "PUT",
+        keepalive: true,
+        headers: { "X-Workbench-Token": c.token, "Content-Type": "application/json" },
+        body: JSON.stringify({ path, content }),
+      }).catch(() => {}); // page is going away; nowhere to report a failure
+    } catch { /* no fetch available at teardown; nothing left to do */ }
+  },
   createPath: (path: string, kind: "file" | "dir") =>
     request<{ path: string }>("POST", "/api/files/create", { path, kind }),
   renamePath: (from: string, to: string) =>
