@@ -62,6 +62,9 @@ export interface AppCtx {
   syncToEditor: (file: string, line: number) => void;
   /** A file was saved in the editor (auto-compile on save, M3). */
   onFileSaved: (path: string) => void;
+  /** Editor tabs register their save here so Compile can persist open edits
+   *  before building (a compile reads from disk). Returns an unregister fn. */
+  registerEditorSave: (filePath: string, save: () => Promise<boolean>) => () => void;
   /** All .tex files in the project (compile picker + main-file setting); null while loading. */
   texFiles: string[] | null;
   /** Re-fetch the .tex list (after create/rename/delete in the Explorer). */

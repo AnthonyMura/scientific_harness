@@ -44,6 +44,9 @@ export default function App() {
   // autoPendingRef coalesces saves that arrive while a compile is running.
   const compilingRef = useRef(false);
   const autoPendingRef = useRef(false);
+  // Open editor tabs register their save here so Compile can persist edits
+  // before building — a compile reads from disk, unsaved edits would be lost.
+  const editorSavesRef = useRef<Map<string, () => Promise<boolean>>>(new Map());
 
   const [layout, dispatch] = useReducer(layoutReducer, undefined, () => loadPersistedLayout().state);
   const layoutRef = useRef(layout);
@@ -298,8 +301,17 @@ export default function App() {
   const compile = async (auto = false, file?: string) => {
     if (!project || compilingRef.current) return;
     const mainFile = file || project.main_file;
-    compilingRef.current = true;
+    compilingRef.current = true; // claim the run before any await
     try {
+      // Persist open editor edits first: a compile reads from disk, so unsaved
+      // changes would otherwise be left out of the build. These saves never
+      // notify onFileSaved — this compile is the follow-up (M3).
+      const saved = await Promise.all([...editorSavesRef.current.values()].map((s) => s()));
+      if (!saved.every(Boolean)) {
+        compilingRef.current = false; // a save failed — allow a retry
+        setBanner("Could not save before compiling");
+        return;
+      }
       const r = await api.startCompile(mainFile, project.target);
       beginJob(
         r.job_id,
@@ -313,6 +325,15 @@ export default function App() {
   };
   const compileRef = useRef<(auto?: boolean, file?: string) => Promise<void>>(() => Promise.resolve());
   compileRef.current = compile;
+
+  /** Editor tabs register their save here so Compile can persist open edits first. */
+  const registerEditorSave = useCallback((filePath: string, save: () => Promise<boolean>) => {
+    const m = editorSavesRef.current;
+    m.set(filePath, save);
+    return () => {
+      if (m.get(filePath) === save) m.delete(filePath);
+    };
+  }, []);
 
   /** A .tex file was saved: kick off (or queue) an auto-compile. */
   const onFileSaved = useCallback(
@@ -541,11 +562,12 @@ export default function App() {
       syncToPdf,
       syncToEditor,
       onFileSaved,
+      registerEditorSave,
     }),
     [project, activeFile, editorFocused, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
      setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
-     pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved],
+     pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave],
   );
 
   return (

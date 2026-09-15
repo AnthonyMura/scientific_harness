@@ -75,7 +75,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const [settings, setSetting] = useModuleSettings("editor", EDITOR_DEFAULTS);
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
-  const saveRef = useRef<() => void>(() => {});
+  /** Save the tab's document; notify=true also fires auto-compile on save. */
+  const saveRef = useRef<((notify?: boolean) => Promise<boolean>)>(async () => true);
   const syncRef = useRef(ctx.syncToPdf);
   syncRef.current = ctx.syncToPdf;
   const gotoRef = useRef(ctx.editorGoto);
@@ -84,6 +85,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
   savedRef.current = ctx.onFileSaved;
   const [viewTick, setViewTick] = useState(0);
   const [dirty, setDirty] = useState(false);
+  // Ref mirror of `dirty` for the save-before-compile registration (stable closure).
+  const dirtyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
   /** Which .tex file the Compile button builds (per tab; defaults to the main file). */
@@ -108,15 +111,18 @@ export default function EditorPane({ ctx, filePath }: Props) {
       const r = await api.readFile(filePath);
       if (cancelled || !hostRef.current) return;
       const lang = langForPath(filePath);
-      const save = () => {
-        if (!view) return;
-        void api
-          .writeFile(filePath, view.state.doc.toString())
-          .then(() => {
-            setDirty(false);
-            savedRef.current(filePath); // auto-compile on save (M3)
-          })
-          .catch((e) => setError(e instanceof Error ? e.message : String(e)));
+      const save = async (notify = true): Promise<boolean> => {
+        if (!view) return true; // nothing loaded — nothing to persist
+        try {
+          await api.writeFile(filePath, view.state.doc.toString());
+          setDirty(false);
+          dirtyRef.current = false;
+          if (notify) savedRef.current(filePath); // auto-compile on save (M3)
+          return true;
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+          return false;
+        }
       };
       saveRef.current = save;
       const tabSize = typeof settings.tabSize === "number" ? settings.tabSize : 4;
@@ -156,7 +162,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
             }),
             EditorState.tabSize.of(tabSize),
             EditorView.updateListener.of((u) => {
-              if (u.docChanged) setDirty(true);
+              if (u.docChanged) {
+                setDirty(true);
+                dirtyRef.current = true;
+              }
             }),
           ],
         }),
@@ -175,11 +184,27 @@ export default function EditorPane({ ctx, filePath }: Props) {
       view?.destroy();
       if (viewRef.current === view) viewRef.current = null;
       setDirty(false);
+      dirtyRef.current = false;
     };
     // tabSize/wrap recreate the view; fontSize/lineHeight are live CSS vars.
     // projectRoot: switching projects must reload even for identical file names.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
+
+  // Register this tab's save so Compile can persist open edits before building
+  // — a compile reads from disk, unsaved changes would otherwise be lost (M3).
+  const registerEditorSave = ctx.registerEditorSave;
+  useEffect(() => {
+    if (!filePath) return;
+    let alive = true;
+    const unregister = registerEditorSave(filePath, () =>
+      alive && dirtyRef.current ? saveRef.current(false) : Promise.resolve(true),
+    );
+    return () => {
+      alive = false;
+      unregister();
+    };
+  }, [filePath, registerEditorSave]);
 
   // Inverse search (M3): PDF click → jump to the line. Re-runs on
   // viewTick because the view is created asynchronously after a load.
@@ -246,7 +271,12 @@ export default function EditorPane({ ctx, filePath }: Props) {
             {jobRunning ? (
               <button className="danger" onClick={() => ctx.onCancelJob()}>Cancel</button>
             ) : (
-              <button className="primary" onClick={() => pick && ctx.onCompileFile(pick)} disabled={!pick}>
+              <button
+                className="primary"
+                title="Saves open edits, then compiles"
+                onClick={() => pick && ctx.onCompileFile(pick)}
+                disabled={!pick}
+              >
                 Compile
               </button>
             )}
