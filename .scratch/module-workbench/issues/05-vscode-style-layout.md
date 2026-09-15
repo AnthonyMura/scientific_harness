@@ -32,9 +32,12 @@ near a pane's bottom/right edge creates a new pane there.
 
 ## Default template
 root = vertical split [ horizontal split [sidebar (Explorer) | editor
-(main.tex)], bottom panel (empty strip) ]. Run Log / PDF / Install open into
+(empty)], bottom panel (empty strip) ]. Run Log / PDF / Install open into
 the bottom panel by default; `homes` remembers where the user last placed
 each module, so the activity bar reopens it there.
+
+> Updated: opening a project now shows the Explorer only — no file is opened
+> automatically (see issue 22).
 
 ## Verification
 `tsc --noEmit` clean; vite build OK; reducer unit tests (25 assertions):
