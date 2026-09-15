@@ -464,7 +464,11 @@ function GroupView({ id }: { id: string }) {
         ) : dropTarget ? (
           <div className="area-empty drop-target-area">Drop “{dragName(drag, layout)}” here</div>
         ) : (
-          <div className="area-empty">Drag a module here — or use the split buttons above.</div>
+          <div className="area-empty">
+            {ctx.projectOpen
+              ? "Click a file in the Explorer to open it — or drag a module here."
+              : "Drag a module here — or use the split buttons above."}
+          </div>
         )}
         {edgeClass && <div className={"edge-line " + edgeClass} />}
       </div>
