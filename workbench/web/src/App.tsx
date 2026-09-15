@@ -5,7 +5,7 @@ import { api, initApi } from "./api";
 import type { ActiveJob, Project, SshConfig, TargetStatus } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
-import type { AppCtx, SyncRequest } from "./modules/ctx";
+import type { AppCtx, EditorSaveHandle, SyncRequest } from "./modules/ctx";
 import { findParent, groupOfTab, layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
 
 function errMsg(e: unknown): string {
@@ -45,8 +45,9 @@ export default function App() {
   const compilingRef = useRef(false);
   const autoPendingRef = useRef(false);
   // Open editor tabs register their save here so Compile can persist edits
-  // before building — a compile reads from disk, unsaved edits would be lost.
-  const editorSavesRef = useRef<Map<string, () => Promise<boolean>>>(new Map());
+  // before building (a compile reads from disk) and the unload guard can flush
+  // them synchronously on page teardown.
+  const editorSavesRef = useRef<Map<string, EditorSaveHandle>>(new Map());
 
   const [layout, dispatch] = useReducer(layoutReducer, undefined, () => loadPersistedLayout().state);
   const layoutRef = useRef(layout);
@@ -306,7 +307,7 @@ export default function App() {
       // Persist open editor edits first: a compile reads from disk, so unsaved
       // changes would otherwise be left out of the build. These saves never
       // notify onFileSaved — this compile is the follow-up (M3).
-      const saved = await Promise.all([...editorSavesRef.current.values()].map((s) => s()));
+      const saved = await Promise.all([...editorSavesRef.current.values()].map((s) => s.run()));
       if (!saved.every(Boolean)) {
         compilingRef.current = false; // a save failed — allow a retry
         setBanner("Could not save before compiling");
@@ -327,11 +328,29 @@ export default function App() {
   compileRef.current = compile;
 
   /** Editor tabs register their save here so Compile can persist open edits first. */
-  const registerEditorSave = useCallback((filePath: string, save: () => Promise<boolean>) => {
+  const registerEditorSave = useCallback((filePath: string, save: EditorSaveHandle) => {
     const m = editorSavesRef.current;
     m.set(filePath, save);
     return () => {
       if (m.get(filePath) === save) m.delete(filePath);
+    };
+  }, []);
+
+  // Page teardown: flush unsaved editor edits with keepalive requests — the
+  // only writes that survive unload (Chrome aborts sync XHR mid-teardown). Both
+  // events are needed because which one fires varies by browser and navigation
+  // type; a first flush claims the write so the second event is a no-op.
+  useEffect(() => {
+    const flushAll = () => {
+      for (const s of editorSavesRef.current.values()) {
+        if (s.dirty) s.flush();
+      }
+    };
+    window.addEventListener("beforeunload", flushAll);
+    window.addEventListener("pagehide", flushAll);
+    return () => {
+      window.removeEventListener("beforeunload", flushAll);
+      window.removeEventListener("pagehide", flushAll);
     };
   }, []);
 
