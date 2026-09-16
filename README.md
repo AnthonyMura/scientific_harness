@@ -31,4 +31,6 @@ Public on GitHub: <https://github.com/AnthonyMura/scientific_harness>. Clone on 
     cd scientific_harness/workbench/web && npm install
     cd ../backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
+Node in WSL must be >= 20 (the distro's can be older - install into `~/nodejs`, see AGENTS.md).
+
 Dev mode: start the sidecar (`workbench/backend`: `WORKBENCH_TOKEN=devtoken ./.venv/bin/python -m workbench_backend serve --port 8765`) and the Vite UI (`workbench/web`, port 5199). The in-app TinyTeX under `workbench/.texlive` is gitignored — it installs itself from the app's Install panel on first use.
