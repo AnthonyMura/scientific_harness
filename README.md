@@ -23,3 +23,12 @@ Building. The v0 core is implemented in [`workbench/`](workbench/) (browser-firs
 - `workbench/` — the v0 app: `web/` (React + Vite UI), `backend/` (Python FastAPI sidecar), `.texlive/` (in-app TinyTeX, gitignored)
 - `.scratch/` — issue tracker and specs per feature
 - `external/` — reference material not part of the project (currently: a generic full-stack web app builder skill prompt, SKILL.md)
+## Repository
+
+Public on GitHub: <https://github.com/AnthonyMura/scientific_harness>. Clone on a new machine (e.g., the office PC):
+
+    git clone https://github.com/AnthonyMura/scientific_harness.git
+    cd scientific_harness/workbench/web && npm install
+    cd ../backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+Dev mode: start the sidecar (`workbench/backend`: `WORKBENCH_TOKEN=devtoken ./.venv/bin/python -m workbench_backend serve --port 8765`) and the Vite UI (`workbench/web`, port 5199). The in-app TinyTeX under `workbench/.texlive` is gitignored — it installs itself from the app's Install panel on first use.
