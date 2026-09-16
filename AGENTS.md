@@ -50,7 +50,7 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Version control
 
-- **Remote**:  -> https://github.com/AnthonyMura/scientific_harness (public; clone and dev-mode setup documented in README)
+- **Remote**: `origin` -> https://github.com/AnthonyMura/scientific_harness (public; clone and dev-mode setup documented in README)
 - Commit messages are scoped by module so history shows where each change landed:
   - `module(<name>): <summary>` — app modules: backend, app-shell, layout, workbench-shell, explorer, editor, pdf-viewer, log-panel, install
   - `web(core): <summary>` — shared web plumbing (api client, types, Vesper theme, icons, base styles)
