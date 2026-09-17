@@ -6,10 +6,11 @@ import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, drawSelection, keymap } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { autocompletion, completionKeymap } from "@codemirror/autocomplete";
+import { acceptCompletion, autocompletion, completionKeymap } from "@codemirror/autocomplete";
 import { bracketMatching, syntaxHighlighting } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { latexLanguage } from "../latexMode";
+import { latexCompletionSource, latexCompletionTheme, reOpenEnvPicker } from "../latexCompletions";
 import { vesperHighlight } from "../vesperTheme";
 import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
@@ -44,12 +45,14 @@ export const EDITOR_DEFAULTS: ModuleSettings = {
 /** Autosave debounce: the disk follows the last keystroke after this pause. */
 const AUTO_SAVE_MS = 1000;
 
-/** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX;
- *  anything else (.txt, .bib, .json, ...) opens as plain text. */
+/** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX
+ *  (with the Overleaf-style autocomplete overlay); anything else (.txt, .bib,
+ *  .json, ...) opens as plain text. */
 function langForPath(p: string): Extension[] {
   const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
   if (ext === "md" || ext === "markdown") return [markdown()];
-  if (ext === "tex" || ext === "sty" || ext === "cls") return [latexLanguage];
+  if (ext === "tex" || ext === "sty" || ext === "cls")
+    return [latexLanguage, EditorState.languageData.of(() => [{ autocomplete: latexCompletionSource }]), latexCompletionTheme];
   return [];
 }
 
@@ -159,7 +162,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
           doc: r.content,
           extensions: [
             history(),
-            autocompletion(),
+            // activateOnCompletion re-queries after a pick — that is what makes
+            // \begin cascade into the environment-name picker (issue 23).
+            autocompletion({ activateOnCompletion: reOpenEnvPicker, icons: false }),
             highlightSelectionMatches(),
             bracketMatching(),
             syntaxHighlighting(vesperHighlight),
@@ -170,6 +175,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
               ...historyKeymap,
               ...searchKeymap,
               ...completionKeymap,
+              // Tab accepts the open completion (Overleaf behavior); with no
+              // overlay showing it falls through to indentation below.
+              { key: "Tab", run: acceptCompletion },
               indentWithTab,
               { key: "Mod-s", run: () => { saveRef.current(); return true; } },
             ]),
