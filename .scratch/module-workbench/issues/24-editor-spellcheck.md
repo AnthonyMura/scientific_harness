@@ -1,6 +1,6 @@
 # 24 — Editor spell check: red underline, on/off toggle, dictionary select
 
-Status: in progress (planned 2026-09-18; branch `feature/editor-spellcheck`)
+Status: resolved (2026-09-18; branch `feature/editor-spellcheck`, commits e96f5e8..5f337ef)
 
 ## Scope
 
@@ -20,11 +20,12 @@ so `\mycommand` in a .tex file is not flagged).
 ## Design
 
 - **Engine** — `hunspell-wasm` (WebAssembly port of Hunspell, LGPL tri-license)
-  runs entirely in the browser; no backend changes. The emscripten loader
-  resolves its 811 KB `hunspell.wasm` as a bare relative URL in the browser,
-  so an npm `postinstall` script copies the binary from
-  `node_modules/hunspell-wasm/wasm/` to `web/public/hunspell.wasm`
-  (gitignored; Vite serves it in dev and build alike).
+  runs entirely in the browser; no backend changes. The emscripten loader would
+  otherwise resolve its 811 KB `hunspell.wasm` relative to its own module URL —
+  inside Vite's deps directory in dev, a 404 — so the app initializes the factory
+  directly with `locateFile` pinned to `/hunspell.wasm`; an npm `postinstall`
+  script copies the binary from `node_modules/hunspell-wasm/wasm/` to
+  `web/public/hunspell.wasm` (gitignored; Vite serves it in dev and build alike).
 - **Dictionaries** — wooorm's normalized hunspell packages (`dictionary-en`,
   `dictionary-ru`, …) are Node-only at runtime, but their `index.aff` /
   `index.dic` files ship in the npm tarball and jsDelivr serves them with CORS
@@ -67,12 +68,24 @@ so `\mycommand` in a .tex file is not flagged).
 
 ## Verification
 
-- `tsc --noEmit` and `vite build` clean.
+- `tsc --noEmit` and `vite build` clean (2026-09-18; pre-existing chunk-size warning only).
 - All 10 dictionary URLs (jsDelivr, `index.aff` + `index.dic`) return HTTP 200.
-- Headless Chrome CDP at 127.0.0.1:5199: open a file with known misspellings →
-  `.sp-misspelled` marks appear under them; toggle off in the gear menu → marks
-  disappear; switch dictionary to Russian → Russian text checks against the
-  Russian dictionary (English typos no longer flagged, Russian typos are);
-  settings persist to localStorage across reload.
+- Headless Chrome CDP at 127.0.0.1:5199 against a scratch project with planted
+  typos — all pass:
+  - EN default: exactly the planted words flagged — `jumpss` plus the Russian line
+    (`Привет`, `мир`, `это`, `тест`); `\mycustomcmd` (LaTeX command) and every correct
+    English word unflagged.
+  - Gear menu → Spell check off: marks cleared immediately; back on: restored.
+  - Dictionary → Russian: `Привет` no longer flagged, `jumpss` still flagged, result set
+    changed (the English sentence is now "misspelled" to the RU dictionary).
+  - IndexedDB `workbench.spellcheck.v1` holds `en.aff`, `en.dic`, `ru.aff`, `ru.dic`.
+  - localStorage `settings.editor`: `spellcheck: true`, `spellLang: "Russian"` after the switch.
 
 ## Comments
+
+CDP verification caught four integration bugs that code review missed, each its own
+commit: the emscripten loader's dev-mode wasm 404 (fixed with a `locateFile` pin),
+a label-vs-code mixup at the EditorPane boundary (`dictionary-English` 404), the
+`StateField` missing its `provide()` clause (marks dispatched but never rendered),
+and the plugin never seeing setting changes because a React toggle dispatches no
+CodeMirror transaction (fixed with an empty `view.dispatch({})` on change).
