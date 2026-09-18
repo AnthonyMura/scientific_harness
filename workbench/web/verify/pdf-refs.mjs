@@ -15,30 +15,33 @@ function check(name, actual, expected) {
 }
 
 // ------------------------------------------------------------- aux: numbered style
+// The real natbib numbers-style aux (as produced by plainnat): the second arg
+// is nested — {{number}{year}{label-parts}}.
 const AUX_NUMBERED = [
   "\\relax ",
-  "\\providecommand\\hyper@linkset[2]{}",
+  "\\citation{smith2023}",
   "\\bibstyle{plainnat}",
   "\\bibdata{refs}",
-  "\\bibcite{smith2023}{1}",
-  "\\bibcite{doe2020}{2}",
-  "\\bibcite{mura2024}{3}",
-  "\\bibcite{lee2019}{4}",
+  "\\bibcite{doe2020}{{1}{2020}{{Doe}}{{}}}",
+  "\\bibcite{lee2019}{{2}{2019}{{Lee}}{{}}}",
+  "\\bibcite{mura2024}{{3}{2024}{{Mura}}{{}}}",
+  "\\bibcite{smith2023}{{4}{2023}{{Smith and Doe}}{{}}}",
 ].join("\n");
 
 {
   const p = parseAux(AUX_NUMBERED);
-  check("aux: four numbered citations mapped", p.numberToKey.size, 4);
-  check("aux: 1 -> smith2023", p.numberToKey.get(1), "smith2023");
-  check("aux: 4 -> lee2019", p.numberToKey.get(4), "lee2019");
+  check("aux: four numbered citations mapped (nested form)", p.numberToKey.size, 4);
+  check("aux: 1 -> doe2020", p.numberToKey.get(1), "doe2020");
+  check("aux: 4 -> smith2023", p.numberToKey.get(4), "smith2023");
   check("aux: bibdata name extracted", p.bibNames.join(","), "refs");
   check("aux: no bibitem order in a natbib aux", p.bibitemOrder.length, 0);
 }
 
-// ------------------------------------------------------------- aux: author-year ignored
+// ------------------------------------------------------------- aux: simple flat form + author-year ignored
 {
-  const p = parseAux("\\bibcite{smith2023}{Smith et~al.(2023)}\n\\bibcite{doe2020}{Doe(2020)}");
-  check("aux: author-year second args are not numbers", p.numberToKey.size, 0);
+  const p = parseAux("\\bibcite{alpha}{7}\n\\bibcite{smith2023}{Smith et~al.(2023)}\n\\bibcite{doe2020}{Doe(2020)}");
+  check("aux: simple flat numeric form accepted", p.numberToKey.get(7), "alpha");
+  check("aux: author-year labels ignored", p.numberToKey.size, 1);
 }
 
 // ------------------------------------------------------------- aux: bibitem order fallback
@@ -143,13 +146,12 @@ const BBL = [
   const map = assembleRefMap(aux.numberToKey, bib, null);
   check("e2e: four numbers resolved", map.size, 4);
   const r1 = map.get(1);
-  check("e2e: [1] title", r1.title, "A very long title that wraps onto a second line in the references section");
-  check("e2e: [1] authors", r1.authors, "Smith, John and Doe, Anna");
-  check("e2e: [1] doi", r1.doi, "10.5555/jt.2023.001");
-  const r2 = map.get(2);
-  check("e2e: [2] key kept, no doi", r2.key + "/" + (r2.doi === undefined), "doe2020/true");
+  check("e2e: [1] is doe2020 (real aux order)", r1.key, "doe2020");
+  check("e2e: [1] no doi stays undefined", r1.doi === undefined, true);
   const r4 = map.get(4);
-  check("e2e: [4] title from inproceedings", r4.title, "Earlier Work on the Same Ground");
+  check("e2e: [4] title (multi-line collapsed)", r4.title, "A very long title that wraps onto a second line in the references section");
+  check("e2e: [4] authors", r4.authors, "Smith, John and Doe, Anna");
+  check("e2e: [4] doi", r4.doi, "10.5555/jt.2023.001");
 
   // bbl fallback: no bib fields, raw text only, numbering from \bibitem order
   const bbl = parseBbl(BBL);
