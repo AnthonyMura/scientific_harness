@@ -18,7 +18,11 @@ import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
 import { GearIcon } from "../icons";
-import { DICTIONARY_OPTIONS, DEFAULT_DICTIONARY_LABEL } from "../spellcheck/dictionaries";
+import {
+  DICTIONARY_OPTIONS,
+  DEFAULT_DICTIONARY_LABEL,
+  dictionaryCodeForLabel,
+} from "../spellcheck/dictionaries";
 import { spellDecoField, spellcheckPlugin, type SpellStatus } from "../spellcheck/decorations";
 
 export const EDITOR_SETTINGS: SettingControl[] = [
@@ -112,7 +116,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const spellRef = useRef({ enabled: true, lang: DEFAULT_DICTIONARY_LABEL });
   spellRef.current = {
     enabled: !!settings.spellcheck,
-    lang: typeof settings.spellLang === "string" ? settings.spellLang : DEFAULT_DICTIONARY_LABEL,
+    // The stored value is a display label; the checker works in codes.
+    lang: dictionaryCodeForLabel(
+      typeof settings.spellLang === "string" ? settings.spellLang : DEFAULT_DICTIONARY_LABEL,
+    ),
   };
   /** Dictionary load state for the pane-header note (loading / error only). */
   const [spellStatus, setSpellStatus] = useState<SpellStatus>("idle");

@@ -26,6 +26,7 @@ const misspelledMark = Decoration.mark({ class: "sp-misspelled" });
 export interface SpellcheckOptions {
   /** Current settings, read at every view update so toggles apply live. */
   getEnabled: () => boolean;
+  /** Dictionary code ("en", "ru", …) — not the display label. */
   getLang: () => string;
   /** Dictionary load progress for the pane-header note. */
   onStatus?: (status: SpellStatus) => void;
