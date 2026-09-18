@@ -146,6 +146,12 @@ def create_app(token: str) -> FastAPI:
         root = projects.root_of(st)
         return {"files": files.tex_files(root)}
 
+    @app.get("/api/files/bib")
+    def files_bib():
+        """All .bib files in the project - feeds citation-key autocomplete."""
+        root = projects.root_of(st)
+        return {"files": files.bib_files(root)}
+
     @app.post("/api/files/copy")
     def files_copy(body: dict):
         root = projects.root_of(st)

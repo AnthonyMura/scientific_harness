@@ -191,6 +191,35 @@ def tex_files(root: Path) -> list[str]:
     return sorted(found)
 
 
+def bib_files(root: Path) -> list[str]:
+    """All .bib files in the project (project-relative), sorted by path.
+
+    Feeds the citation-key autocomplete overlay in the editor - the same
+    walk as tex_files, different suffix.
+    """
+    root_resolved = root.resolve()
+    found: list[str] = []
+
+    def walk(d: Path) -> None:
+        try:
+            children = sorted(d.iterdir(), key=lambda p: p.name.lower())
+        except OSError:
+            return
+        for child in children:
+            if child.name.startswith("."):
+                continue  # dotfiles/dirs (.git, .workbench, ...) are not sources
+            if child.is_dir():
+                walk(child)
+            elif child.suffix.lower() == ".bib":
+                try:
+                    found.append(str(child.relative_to(root_resolved)).replace("\\", "/"))
+                except ValueError:
+                    pass
+
+    walk(root_resolved)
+    return sorted(found)
+
+
 def copy_file(root: Path, src_rel: str, dst_rel: str) -> dict:
     """Copy a project file to another project path (Save As / duplicate).
 
