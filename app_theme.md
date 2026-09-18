@@ -89,7 +89,7 @@ Wordmark left · project name + main-file select center-left · compile-target s
 
 ### Editor (center)
 - Gutter on `--bg-base`; line numbers brown, 11px, right-aligned.
-- Syntax (LaTeX): commands `#B38F6F` · section-level commands (`\section`, `\begin{document}`) `#C3A893` semibold · braces/arguments taupe · comments brown italic · math `$…$` pearl at 75%.
+- Syntax (LaTeX): commands `#B38F6F` · section-level commands (`\section`, `\begin{document}`) `#C3A893` semibold · citation author keys (`\citep{…}` & kin) brick `#7B1612` · braces/arguments taupe · comments brown italic · math `$…$` pearl at 75%.
 - **Error line:** background `rgba(123,22,18,.35)` + 2px brick left border + message in `--err`.
 - Caret: pearl, 2px. Selection: `rgba(sand,.28)`.
 
@@ -212,10 +212,12 @@ The theme is implemented in the real app under `workbench/web`:
   brightest surface, small-caps pane headers, brick primary button, no green.
 - **`src/vesperTheme.ts`** — CodeMirror `HighlightStyle`: commands sand
   `#B38F6F`, structural commands (sections, environments, document header)
-  gold-bright `#C3A893` semibold, comments brown `#8D7564` italic, delimiters
-  taupe `#BCB1A0`.
+  gold-bright `#C3A893` semibold, citation author keys brick `var(--brick)`,
+  comments brown `#8D7564` italic, delimiters taupe `#BCB1A0`.
 - **`src/latexMode.ts`** — emits the `keyword.special` token for structural
-  commands so the gold-bright rule applies.
+  commands so the gold-bright rule applies, and tracks citation arguments
+  across lines to emit a custom `citation` token (via `tokenTable`) for the
+  author keys inside `\citep{…}` & kin.
 - **`src/components/PdfViewer.tsx`** — passes `background: "#F2F1ED"` to
   pdf.js render so the page itself is pearl (pdf.js fills white by default).
 - **`index.html`** — title "Scientific Harness"; loads Cormorant Garamond +
