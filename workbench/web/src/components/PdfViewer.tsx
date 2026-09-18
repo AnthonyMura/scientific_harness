@@ -447,40 +447,61 @@ export default function PdfViewer({ ctx }: Props) {
     };
     tipHideRef.current = hide;
 
-    // Fill the tooltip from the reference data for the marker's first number.
+    // Fill the tooltip from the reference data for every number in the
+    // marker's group — [2,3] shows both references (issue 34). Entries are
+    // capped so a wide range citation cannot grow the card unboundedly.
+    const MAX_TIP_ENTRIES = 6;
     const fillTip = (marker: HTMLElement): boolean => {
       const el = ensureTip();
       el.textContent = "";
-      const n = parseInt(marker.dataset.cite?.split(",")[0] ?? "", 10);
-      if (!Number.isFinite(n)) return false;
-      const info = refsRef.current?.get(n);
-      if (!info) return false;
-      if (info.title || info.authors || info.doi) {
-        if (info.title) {
-          const t = document.createElement("div");
-          t.className = "pdf-cite-tip-title";
-          t.textContent = info.title;
-          el.appendChild(t);
+      const nums = (marker.dataset.cite ?? "")
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => Number.isFinite(n));
+      let shown = 0;
+      for (const n of nums) {
+        if (shown >= MAX_TIP_ENTRIES) break;
+        const info = refsRef.current?.get(n);
+        if (!info) continue;
+        const entry = document.createElement("div");
+        entry.className = "pdf-cite-tip-entry";
+        if (info.title || info.authors || info.doi) {
+          if (info.title) {
+            const t = document.createElement("div");
+            t.className = "pdf-cite-tip-title";
+            t.textContent = info.title;
+            entry.appendChild(t);
+          }
+          if (info.authors) {
+            const a = document.createElement("div");
+            a.className = "pdf-cite-tip-authors";
+            a.textContent = info.authors;
+            entry.appendChild(a);
+          }
+          if (info.doi) {
+            const d = document.createElement("div");
+            d.className = "pdf-cite-tip-doi";
+            d.textContent = `doi: ${info.doi}`;
+            entry.appendChild(d);
+          }
+        } else if (info.raw) {
+          const r = document.createElement("div");
+          r.className = "pdf-cite-tip-raw";
+          r.textContent = info.raw;
+          entry.appendChild(r);
+        } else {
+          continue;
         }
-        if (info.authors) {
-          const a = document.createElement("div");
-          a.className = "pdf-cite-tip-authors";
-          a.textContent = info.authors;
-          el.appendChild(a);
-        }
-        if (info.doi) {
-          const d = document.createElement("div");
-          d.className = "pdf-cite-tip-doi";
-          d.textContent = `doi: ${info.doi}`;
-          el.appendChild(d);
-        }
-      } else if (info.raw) {
-        const r = document.createElement("div");
-        r.className = "pdf-cite-tip-raw";
-        r.textContent = info.raw;
-        el.appendChild(r);
-      } else {
-        return false;
+        el.appendChild(entry);
+        shown += 1;
+      }
+      if (shown === 0) return false;
+      const hidden = nums.length - shown;
+      if (hidden > 0) {
+        const more = document.createElement("div");
+        more.className = "pdf-cite-tip-more";
+        more.textContent = `\u2026 plus ${hidden} more`;
+        el.appendChild(more);
       }
       return true;
     };
