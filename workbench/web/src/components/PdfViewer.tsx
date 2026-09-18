@@ -412,36 +412,65 @@ export default function PdfViewer({ ctx }: Props) {
     };
   }, []);
 
-  // Citation hover tooltip (issue 27): an imperative node in .pdf-pane — a
-  // small card with the reference's title, authors and DOI (or the raw entry
-  // text when only the PDF's own References section is available). Shown 200 ms
-  // after the pointer rests on a .pdf-cite marker; leave / scroll / click /
-  // re-render hide it at once; moving between adjacent citations swaps the
-  // content in place. No animation (v0 motion rule).
+  // Citation hover tooltip (issues 27/34/35): an imperative node in .pdf-pane
+  // — a small card with every reference of the hovered group (title, authors,
+  // DOI as a clickable link, or the raw entry text when only the PDF's own
+  // References section is available). Shown 200 ms after the pointer rests on
+  // a .pdf-cite marker; scroll / click / re-render hide it at once; moving
+  // between adjacent citations swaps the content in place. Interactive
+  // (issue 35): the pointer can rest on the card to select/copy its text and
+  // follow DOI links — leaving the marker or the card starts a short grace
+  // period instead of hiding, so crossing the gap onto the card keeps it
+  // alive. No animation (v0 motion rule).
   useEffect(() => {
     const host = hostRef.current;
     const pane = paneRef.current;
     if (!host || !pane) return;
     let tip: HTMLDivElement | null = null;
-    let timer: number | undefined;
+    let timer: number | undefined; // pending show
+    let hideTimer: number | undefined; // pending hide (grace bridge, issue 35)
     let target: HTMLElement | null = null; // marker shown, or pending its timer
     let lastX = 0;
     let lastY = 0;
 
+    const clearTimers = () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      if (hideTimer !== undefined) {
+        window.clearTimeout(hideTimer);
+        hideTimer = undefined;
+      }
+    };
+    const scheduleHide = () => {
+      if (hideTimer !== undefined) return; // already pending
+      hideTimer = window.setTimeout(() => {
+        hideTimer = undefined;
+        hide();
+      }, 200);
+    };
     const ensureTip = () => {
       if (!tip) {
         tip = document.createElement("div");
         tip.className = "pdf-cite-tip";
         tip.style.display = "none";
+        // Interactive (issue 35): the pointer may rest on the card to select
+        // and copy its text or follow a DOI link. Entering it cancels a
+        // pending hide; leaving it starts one again.
+        tip.addEventListener("mouseenter", () => {
+          if (hideTimer !== undefined) {
+            window.clearTimeout(hideTimer);
+            hideTimer = undefined;
+          }
+        });
+        tip.addEventListener("mouseleave", scheduleHide);
         pane.appendChild(tip);
       }
       return tip;
     };
     const hide = () => {
-      if (timer !== undefined) {
-        window.clearTimeout(timer);
-        timer = undefined;
-      }
+      clearTimers();
       target = null;
       if (tip) tip.style.display = "none";
     };
@@ -481,7 +510,18 @@ export default function PdfViewer({ ctx }: Props) {
           if (info.doi) {
             const d = document.createElement("div");
             d.className = "pdf-cite-tip-doi";
-            d.textContent = `doi: ${info.doi}`;
+            const doi = info.doi.trim();
+            // Link only when it looks like a real DOI (issue 35).
+            if (/^10\.\d{4,9}\/\S+$/.test(doi)) {
+              const a = document.createElement("a");
+              a.href = `https://doi.org/${doi}`;
+              a.target = "_blank";
+              a.rel = "noreferrer noopener";
+              a.textContent = `doi: ${doi}`;
+              d.appendChild(a);
+            } else {
+              d.textContent = `doi: ${doi}`;
+            }
             entry.appendChild(d);
           }
         } else if (info.raw) {
@@ -523,6 +563,10 @@ export default function PdfViewer({ ctx }: Props) {
     const onOver = (e: MouseEvent) => {
       const m = (e.target as HTMLElement).closest?.(".pdf-cite") as HTMLElement | null;
       if (!m) return;
+      if (hideTimer !== undefined) {
+        window.clearTimeout(hideTimer);
+        hideTimer = undefined;
+      }
       lastX = e.clientX;
       lastY = e.clientY;
       if (timer !== undefined) {
@@ -555,7 +599,9 @@ export default function PdfViewer({ ctx }: Props) {
       // Straight onto another citation? The next mouseover swaps in place.
       const next = (e.relatedTarget as Element | null)?.closest?.(".pdf-cite");
       if (next) return;
-      hide();
+      // Grace period (issue 35): the pointer may be crossing the gap onto the
+      // tooltip itself — its mouseenter cancels the pending hide.
+      scheduleHide();
     };
 
     const onMove = (e: MouseEvent) => {
