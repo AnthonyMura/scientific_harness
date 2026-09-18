@@ -438,18 +438,20 @@ input::placeholder { color: var(--text-3); }
   }
 }
 
-/* Citation marker (issue 26): a transparent clickable box over each [...]
-   group in the text layer. Sand is the token for links (§4); gold-bright stays
-   editor-only. */
+/* Citation marker (issue 26): a visible link-styled box over each [...] group
+   in the text layer. Sand is the token for links (§4): a quiet tint + underline
+   at rest, a stronger wash on hover. Gold-bright stays editor-only. */
 .pdf-cite {
   position: absolute;
-  background: transparent;
+  background: rgba(179, 143, 111, 0.12);
+  box-shadow: inset 0 -1px 0 rgba(179, 143, 111, 0.55);
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: background 120ms ease;
+  transition: background 120ms ease, box-shadow 120ms ease;
 }
 .pdf-cite:hover {
-  background: rgba(179, 143, 111, 0.2);
+  background: rgba(179, 143, 111, 0.35);
+  box-shadow: inset 0 -1px 0 rgba(179, 143, 111, 0.9);
 }
 
 /* Back pill (issue 26): returns to the clicked citation. Top-left below the

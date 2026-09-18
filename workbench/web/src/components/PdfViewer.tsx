@@ -15,7 +15,7 @@ import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
 import { forwardLookup, parseSynctex, reverseLookup } from "../modules/synctex";
 import type { SynctexData } from "../modules/synctex";
-import { bibStartLines, scanBibliography, scanPage } from "../modules/pdfCitations";
+import { CITE_MARKER_PAD, bibStartLines, scanBibliography, scanPage } from "../modules/pdfCitations";
 import type { BibEntry, Box, CiteGroup, LineItem } from "../modules/pdfCitations";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
@@ -204,8 +204,8 @@ export default function PdfViewer({ ctx }: Props) {
                 if (!pageEl) continue;
                 const startY = pi === headingPage ? pages[pi][starts[pi]].yTop : -Infinity;
                 for (const m of Array.from(pageEl.querySelectorAll(".pdf-cite")) as HTMLElement[]) {
-                  // makeCiteMarker pads the box by 1px on every side.
-                  if (parseFloat(m.style.top) + 1 < startY) continue;
+                  // makeCiteMarker pads the box by CITE_MARKER_PAD on every side.
+                  if (parseFloat(m.style.top) + CITE_MARKER_PAD < startY) continue;
                   m.remove();
                 }
               }

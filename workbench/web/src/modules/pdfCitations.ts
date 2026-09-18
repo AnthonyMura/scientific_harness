@@ -220,11 +220,15 @@ export function matchCitations(line: LineGroup): CiteGroup[] {
  *  to the page wrapper after the text layer so it sits above and intercepts
  *  pointer events on the cited glyphs (text selection starting exactly on a
  *  citation is sacrificed — by design, the citations are interactive). */
+/** Slack (px) around a citation group's box. Exported because the viewer's
+ *  bibliography-unmark pass compares marker offsets against line geometry. */
+export const CITE_MARKER_PAD = 2;
+
 export function makeCiteMarker(g: CiteGroup): HTMLElement {
   const el = document.createElement("span");
   el.className = "pdf-cite";
   el.dataset.cite = g.numbers.join(",");
-  const pad = 1; // a little slack so the hover tint covers the glyph edges
+  const pad = CITE_MARKER_PAD; // slack so the link tint/underline clears the glyph edges
   el.style.left = `${g.box.x0 - pad}px`;
   el.style.top = `${g.box.y0 - pad}px`;
   el.style.width = `${g.box.x1 - g.box.x0 + pad * 2}px`;
