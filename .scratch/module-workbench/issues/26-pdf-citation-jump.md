@@ -1,6 +1,6 @@
 # 26 — PDF citation jump: click a citation → its reference entry + back button
 
-Status: planned (independent branch `feature/pdf-citation-jump`, from `main`)
+Status: resolved (2026-09-18, branch `feature/pdf-citation-jump` off `main`)
 
 ## Request
 
@@ -141,6 +141,12 @@ Pure + DOM-scan helpers (no React):
   - Click the pill → scroll returns to the body position; flash element appears.
   - Escape dismisses the pill; clicking plain text still runs inverse search.
 
+### Results (2026-09-18)
+
+- Node harness (`workbench/web/verify/pdf-citations.mjs`): **32/32 passing** — line grouping, all dash variants, range expansion (cap 50), non-citation brackets rejected, groups wrapped across lines not matched, bibliography index (heading variants, page-spanning entries, two-column guard), `bibStartLines` heading detection.
+- `tsc --noEmit` + `vite build` clean (WSL).
+- Headless Chrome CDP (`test-latex-project/cdp_citation_test.mjs`) against the natbib fixture: **11/11 passing** — exactly one PDF pane; four body markers `[4] [1,3] [2] [4,1,3]` (plainnat sorts the bibliography alphabetically and keeps argument order in multi-cites, so the body groups are not sequential); click scrolls to the entry with the back pill `← back to [2] · p. 1`; back restores the exact clicked scroll position; sand flash on the citation page; a second jump on the same marker works; Escape dismisses; a plain-text click inverse-searches (the whole cited sentence is selected in the editor); no pill for plain clicks.
+
 ## Coordination with issue 27 (hover tooltip)
 
 This ticket owns `modules/pdfCitations.ts` and the `.pdf-cite` markers — 27's
@@ -151,3 +157,8 @@ coordination note (its local scan is dropped on merge).
 ## Comments
 
 (created from the user request; implementation starts after plan acceptance)
+
+Implementation notes (2026-09-18):
+- `BibEntry` gained two fields beyond the ticket's interface — `x1Px` (first-line extent, sizes the flash box) and `lineHpx` (vertical centering) — a minimal extension of the same shape.
+- The module exports one helper beyond the ticket's list: `bibStartLines(pages)` — per-page index of the References heading line (0 for later pages, -1 when absent). The viewer uses it to unmark `[N]` groups on/after the heading so bibliography entry labels are never rendered as clickable citations.
+- The back pill restores the exact clicked position: the original `scrollLeft` is saved with the target and restored verbatim (a recomputed offset drifts once the page has scrolled horizontally).
