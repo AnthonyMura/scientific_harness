@@ -412,16 +412,17 @@ export default function PdfViewer({ ctx }: Props) {
     };
   }, []);
 
-  // Citation hover tooltip (issues 27/34/35): an imperative node in .pdf-pane
-  // — a small card with every reference of the hovered group (title, authors,
-  // DOI as a clickable link, or the raw entry text when only the PDF's own
-  // References section is available). Shown 200 ms after the pointer rests on
-  // a .pdf-cite marker; scroll / click / re-render hide it at once; moving
-  // between adjacent citations swaps the content in place. Interactive
-  // (issue 35): the pointer can rest on the card to select/copy its text and
-  // follow DOI links — leaving the marker or the card starts a short grace
-  // period instead of hiding, so crossing the gap onto the card keeps it
-  // alive. No animation (v0 motion rule).
+  // Citation hover tooltip (issues 27/34/35/36): an imperative node in
+  // .pdf-pane — a small card with every reference of the hovered group (title,
+  // authors, DOI as a clickable link, or the raw entry text when only the PDF's
+  // own References section is available). Shown 200 ms after the pointer rests
+  // on a .pdf-cite marker; scroll / click / re-render hide it at once; moving
+  // between adjacent citations swaps the content in place. Static (issue 36):
+  // placed once, bottom-right of the cursor, at show time — no cursor tracking
+  // afterwards, so the pointer can rest on it. Interactive (issue 35): select /
+  // copy its text and follow DOI links while hovering; leaving the marker or
+  // the card starts a short grace period instead of hiding, so crossing the gap
+  // onto the card keeps it alive. No animation (v0 motion rule).
   useEffect(() => {
     const host = hostRef.current;
     const pane = paneRef.current;
@@ -546,8 +547,9 @@ export default function PdfViewer({ ctx }: Props) {
       return true;
     };
 
-    // Fixed at cursor + (12, 16); flipped above the cursor when it would
-    // overflow the viewport bottom, clamped horizontally.
+    // Placed once at show time: cursor + (12, 16), flipped above the cursor
+    // when it would overflow the viewport bottom, clamped horizontally. Static
+    // afterwards — no cursor tracking (issue 36).
     const position = () => {
       if (!tip) return;
       const w = tip.offsetWidth;
@@ -577,9 +579,9 @@ export default function PdfViewer({ ctx }: Props) {
       target = m;
       const el = ensureTip();
       if (el.style.display !== "none") {
-        // Moving between adjacent citations: swap content in place, no flicker.
-        if (fillTip(m)) position();
-        else hide();
+        // Moving between adjacent citations: swap content in place, no
+        // flicker, and the card stays where it first appeared (issue 36).
+        if (!fillTip(m)) hide();
         return;
       }
       timer = window.setTimeout(() => {
@@ -604,21 +606,14 @@ export default function PdfViewer({ ctx }: Props) {
       scheduleHide();
     };
 
-    const onMove = (e: MouseEvent) => {
-      lastX = e.clientX;
-      lastY = e.clientY;
-      if (tip && tip.style.display === "none") return; // pending — position on show
-      if (target) position();
-    };
+    // No mousemove tracking (issue 36): the card is static once shown.
 
     host.addEventListener("mouseover", onOver);
     host.addEventListener("mouseout", onOut);
-    host.addEventListener("mousemove", onMove);
     host.addEventListener("scroll", hide, { passive: true });
     return () => {
       host.removeEventListener("mouseover", onOver);
       host.removeEventListener("mouseout", onOut);
-      host.removeEventListener("mousemove", onMove);
       host.removeEventListener("scroll", hide);
       tipHideRef.current = null;
       hide();
