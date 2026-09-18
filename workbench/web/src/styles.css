@@ -500,7 +500,7 @@ input::placeholder { color: var(--text-3); }
    citations ([2,3]) list every entry, capped at six with a "… plus N more"
    line (issue 34). Interactive (issue 35): pointer-events auto so the pointer
    can rest on the card — select/copy its text, follow the DOI link; a grace
-   period in PdfViewer bridges the gap between marker and card. Shown/hidden
+   period in PdfViewer bridges the gap between marker and card; placed once at show, static afterwards (issue 36). Shown/hidden
    imperatively (no animation, v0 rule). */
 .pdf-cite-tip {
   position: fixed;
