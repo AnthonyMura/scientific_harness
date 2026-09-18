@@ -15,6 +15,8 @@ import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
 import { forwardLookup, parseSynctex, reverseLookup } from "../modules/synctex";
 import type { SynctexData } from "../modules/synctex";
+import { bibStartLines, scanBibliography, scanPage } from "../modules/pdfCitations";
+import type { BibEntry, Box, CiteGroup, LineItem } from "../modules/pdfCitations";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
@@ -34,6 +36,18 @@ interface Props {
 function baseName(p: string): string {
   const i = p.lastIndexOf("/");
   return i === -1 ? p : p.slice(i + 1);
+}
+
+/** One-shot sand flash over a page-local box (citation jump + back pill). */
+function flashBoxIn(pageEl: HTMLElement, box: Box) {
+  const flash = document.createElement("div");
+  flash.className = "pdf-sync-flash";
+  flash.style.left = `${box.x0}px`;
+  flash.style.top = `${box.y0}px`;
+  flash.style.width = `${Math.max(8, box.x1 - box.x0)}px`;
+  flash.style.height = `${Math.max(8, box.y1 - box.y0)}px`;
+  pageEl.appendChild(flash);
+  window.setTimeout(() => flash.remove(), 1700);
 }
 
 export default function PdfViewer({ ctx }: Props) {
@@ -61,6 +75,14 @@ export default function PdfViewer({ ctx }: Props) {
   const [savedNote, setSavedNote] = useState<string | null>(null);
   // pdfVersion when the static file was opened — a newer compile gets a chip.
   const versionAtOpenRef = useRef<number | null>(null);
+  // Citation jump (issue 26): results of the post-render scan — citation
+  // groups per page, visual lines per page, and the bibliography index. All
+  // boxes are page-local CSS px at the current zoom; rebuilt every render pass.
+  const citeIndexRef = useRef<{ page: number; group: CiteGroup }[]>([]);
+  const pageLinesRef = useRef<LineItem[][]>([]);
+  const bibIndexRef = useRef<Map<number, BibEntry>>(new Map());
+  // Where the user clicked a citation — the back pill returns here.
+  const [backTarget, setBackTarget] = useState<{ page: number; box: Box; label: string; left: number } | null>(null);
 
   // Mode switch: drop any stale SyncTeX map (re-fetched in compiled-output
   // mode) and remember which compile produced what we are looking at.
@@ -116,7 +138,12 @@ export default function PdfViewer({ ctx }: Props) {
         docRef.current = doc;
         const host = hostRef.current;
         if (!host) return;
-        host.innerHTML = "";
+        host.innerHTML = ""; // also clears the citation markers of the last pass
+        // A new render pass rebuilds the citation index and clears the back pill.
+        citeIndexRef.current = [];
+        pageLinesRef.current = [];
+        bibIndexRef.current = new Map();
+        setBackTarget(null);
         setStatus(`rendering ${doc.numPages} page(s)…`);
         for (let i = 1; i <= doc.numPages; i++) {
           if (cancelled) break;
@@ -148,8 +175,44 @@ export default function PdfViewer({ ctx }: Props) {
           });
           textLayers.push(layer);
           await layer.render().catch(() => {}); // rejects on cancel — fine
+          if (cancelled) break;
+          // Citation scan (issue 26): read the laid-out text spans, group them
+          // into visual lines, and drop a marker over each [...] group.
+          const scanned = scanPage(pageDiv, layer);
+          for (const g of scanned.groups) citeIndexRef.current.push({ page: i, group: g });
+          pageLinesRef.current.push(scanned.lines);
         }
-        if (!cancelled) setStatus("");
+        if (!cancelled) {
+          // The whole document is in — build the bibliography index (issue 26),
+          // then unmark the entry labels: a [N] starting a reference line is an
+          // entry, not a citation.
+          const pages = pageLinesRef.current;
+          bibIndexRef.current = scanBibliography(pages);
+          const starts = bibStartLines(pages);
+          const headingPage = starts.findIndex((s) => s >= 0);
+          if (headingPage >= 0) {
+            citeIndexRef.current = citeIndexRef.current.filter((c) => {
+              if (c.page < headingPage + 1) return true;
+              const startY =
+                c.page === headingPage + 1 ? pages[c.page - 1][starts[c.page - 1]].yTop : -Infinity;
+              return c.group.box.y0 < startY;
+            });
+            const hostEl = hostRef.current;
+            if (hostEl) {
+              for (let pi = headingPage; pi < pages.length; pi++) {
+                const pageEl = hostEl.children[pi] as HTMLElement | undefined;
+                if (!pageEl) continue;
+                const startY = pi === headingPage ? pages[pi][starts[pi]].yTop : -Infinity;
+                for (const m of Array.from(pageEl.querySelectorAll(".pdf-cite")) as HTMLElement[]) {
+                  // makeCiteMarker pads the box by 1px on every side.
+                  if (parseFloat(m.style.top) + 1 < startY) continue;
+                  m.remove();
+                }
+              }
+            }
+          }
+          setStatus("");
+        }
       } catch (e) {
         if (!cancelled) setStatus(e instanceof Error ? e.message : String(e));
       }
@@ -210,8 +273,10 @@ export default function PdfViewer({ ctx }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.pdfSync, synctexTick]);
 
-  // Inverse search (M3): click a page → open the source file at that line.
-  // Drags (text selection) are ignored via pointer-down distance.
+  // Inverse search (M3) + citation jump (issue 26): a click on a page either
+  // jumps to the reference entry of a clicked citation or opens the source
+  // file at that line. Drags (text selection) are ignored via pointer-down
+  // distance.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -223,20 +288,69 @@ export default function PdfViewer({ ctx }: Props) {
     };
     const onClick = (e: MouseEvent) => {
       if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) return;
-      const data = synctexRef.current;
-      if (!data) return;
       const pageDiv = (e.target as HTMLElement).closest(".pdf-page") as HTMLElement | null;
       if (!pageDiv) return;
       const pageIndex = Array.prototype.indexOf.call(host.children, pageDiv);
       if (pageIndex < 0) return;
       const rect = pageDiv.getBoundingClientRect();
-      const scale = parseFloat(pageDiv.style.getPropertyValue("--scale-factor")) || 1;
-      const hit = reverseLookup(
-        data,
-        pageIndex + 1,
-        (e.clientX - rect.left) / scale,
-        (e.clientY - rect.top) / scale,
+      const localX = e.clientX - rect.left;
+      const localY = e.clientY - rect.top;
+
+      // Citation jump first: hit-test the scanned [...] groups. A hit whose
+      // number is in the bibliography index wins; otherwise fall through to
+      // inverse search (e.g. a bracketed year, or no references section).
+      const cite = citeIndexRef.current.find(
+        (c) =>
+          c.page === pageIndex + 1 &&
+          localX >= c.group.box.x0 - 2 &&
+          localX <= c.group.box.x1 + 2 &&
+          localY >= c.group.box.y0 - 2 &&
+          localY <= c.group.box.y1 + 2,
       );
+      if (cite) {
+        const g = cite.group;
+        let n = g.numbers[0];
+        for (let i = 0; i < g.subBoxes.length; i++) {
+          if (localX >= g.subBoxes[i].x0 && localX <= g.subBoxes[i].x1) {
+            n = g.numbers[i];
+            break;
+          }
+        }
+        const bib = bibIndexRef.current.get(n);
+        if (bib) {
+          const target = host.children[bib.page - 1] as HTMLElement | undefined;
+          if (target) {
+            const scale = parseFloat(target.style.getPropertyValue("--scale-factor")) || 1;
+            const hostRect = host.getBoundingClientRect();
+            const pageRect = target.getBoundingClientRect();
+            host.scrollTo({
+              top: Math.max(
+                0,
+                host.scrollTop +
+                  (pageRect.top - hostRect.top) +
+                  bib.yTopPx +
+                  bib.lineHpx / 2 -
+                  host.clientHeight / 2,
+              ),
+              left: Math.max(0, host.scrollLeft + (pageRect.left - hostRect.left) + bib.xPx - 80),
+              behavior: "smooth",
+            });
+            flashBoxIn(target, {
+              x0: bib.xPx,
+              y0: bib.yTopPx - 2 * scale,
+              x1: bib.x1Px,
+              y1: bib.yTopPx + bib.lineHpx,
+            });
+          }
+          setBackTarget({ page: pageIndex + 1, box: g.box, label: `[${n}]`, left: host.scrollLeft });
+          return; // inverse search is suppressed for this click
+        }
+      }
+
+      const data = synctexRef.current;
+      if (!data) return;
+      const scale = parseFloat(pageDiv.style.getPropertyValue("--scale-factor")) || 1;
+      const hit = reverseLookup(data, pageIndex + 1, localX / scale, localY / scale);
       if (hit) ctxRef.current.syncToEditor(hit.file, hit.line);
     };
     host.addEventListener("pointerdown", onDown);
@@ -246,6 +360,37 @@ export default function PdfViewer({ ctx }: Props) {
       host.removeEventListener("click", onClick);
     };
   }, []);
+
+  // Back pill (issue 26): smooth-scroll back to the clicked citation and flash
+  // it. Dismissed by ✕, Escape, a new jump, or any re-render.
+  const goBack = () => {
+    const t = backTarget;
+    if (!t) return;
+    setBackTarget(null);
+    const host = hostRef.current;
+    const pageDiv = host ? (host.children[t.page - 1] as HTMLElement | undefined) : undefined;
+    if (!host || !pageDiv) return;
+    const hostRect = host.getBoundingClientRect();
+    const pageRect = pageDiv.getBoundingClientRect();
+    const cy = (t.box.y0 + t.box.y1) / 2;
+    // Restore the exact clicked position: the horizontal offset is saved at
+    // click time so the marker sits where it did when it was clicked.
+    host.scrollTo({
+      top: Math.max(0, host.scrollTop + (pageRect.top - hostRect.top) + cy - host.clientHeight / 2),
+      left: t.left,
+      behavior: "smooth",
+    });
+    flashBoxIn(pageDiv, t.box);
+  };
+
+  useEffect(() => {
+    if (!backTarget) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setBackTarget(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [backTarget]);
 
   useEffect(
     () => () => {
@@ -389,6 +534,21 @@ export default function PdfViewer({ ctx }: Props) {
         </button>
       </div>
       <div className="pdf-host" ref={hostRef} />
+      {backTarget && (
+        <div className="pdf-back-pill">
+          <button type="button" onClick={goBack} title="Scroll back to the citation you clicked">
+            ← back to {backTarget.label} · p. {backTarget.page}
+          </button>
+          <button
+            type="button"
+            className="pdf-back-pill-x"
+            onClick={() => setBackTarget(null)}
+            title="Dismiss (Esc)"
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {gearOpen && (
         <SettingsMenu
           x={gearOpen.x}
