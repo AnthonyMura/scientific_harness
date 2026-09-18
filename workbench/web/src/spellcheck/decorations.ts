@@ -3,8 +3,13 @@
 // ViewPlugin owns the async recheck pipeline — debounced after typing,
 // immediate on toggle / language switch.
 import { StateEffect, StateField } from "@codemirror/state";
-import { Decoration, DecorationSet, ViewPlugin, type ViewUpdate } from "@codemirror/view";
-import type { EditorView } from "@codemirror/view";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from "@codemirror/view";
 import { findMisspelled, getChecker } from "./checker";
 
 /** Dictionary load state for the pane-header note. */
@@ -19,6 +24,8 @@ export const spellDecoField = StateField.define<DecorationSet>({
     for (const e of tr.effects) if (e.is(setSpellDeco)) return e.value;
     return deco;
   },
+  // Without this the field holds a set nothing renders.
+  provide: (field) => [EditorView.decorations.of((view) => view.state.field(field))],
 });
 
 const misspelledMark = Decoration.mark({ class: "sp-misspelled" });
