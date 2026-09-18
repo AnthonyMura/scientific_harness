@@ -29,13 +29,19 @@ export interface AuxParse {
   bibitemOrder: string[];
 }
 
-const BIBCITE_RE = /\\bibcite\{([^{}]+)\}\s*\{([^{}]*)\}/g;
+// natbib writes two forms in the wild:
+//   numbers style:  \bibcite{doe2020}{{1}{2020}{{Doe}}{{}}}
+//   author-year:    \bibcite{smith2023}{Smith et~al.(2023)}
+// The value may hold one level of nested groups (the numbers form); the
+// citation number is the first inner group there, or the whole flat value.
+const BIBCITE_RE = /\\bibcite\{([^{}]+)\}\s*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}/g;
 const BIBITEM_RE = /\\bibitem(?:\[[^\]]*\]|\{[^{}]*\})?\s*\{([^{}]+)\}/g;
 const BIBDATA_RE = /\\bibdata(?:\[[^\]]*\])?\s*\{([^{}]*)\}/g;
 
-/** Parse a .aux file: \bibcite{key}{n} with a purely numeric n → number→key
- *  (numbered styles only — an author-year second argument is ignored),
- *  \bibitem{key} order as the numbering fallback, and \bibdata names. */
+/** Parse a .aux file: \bibcite{key}{...} with a purely numeric citation
+ *  number → number→key (numbered styles only — an author-year label argument
+ *  is ignored), \bibitem{key} order as the numbering fallback, and \bibdata
+ *  names. */
 export function parseAux(text: string): AuxParse {
   const numberToKey = new Map<number, string>();
   const bibitemOrder: string[] = [];
@@ -44,8 +50,21 @@ export function parseAux(text: string): AuxParse {
   BIBCITE_RE.lastIndex = 0;
   while ((m = BIBCITE_RE.exec(text))) {
     const key = m[1].trim();
-    const arg = m[2].trim();
-    if (key && /^\d+$/.test(arg)) numberToKey.set(parseInt(arg, 10), key);
+    if (!key) continue;
+    const val = m[2];
+    let num = "";
+    if (/^\{/.test(val)) {
+      // Nested numbers form: the first inner group is the citation number.
+      const inner = /^\{\s*(\d+)\s*\}/.exec(val);
+      if (!inner) continue;
+      num = inner[1];
+    } else if (/^\d+$/.test(val.trim())) {
+      num = val.trim(); // simple flat form
+    } else {
+      continue; // author-year label — not a number
+    }
+    const n = parseInt(num, 10);
+    if (n > 0) numberToKey.set(n, key);
   }
 
   BIBITEM_RE.lastIndex = 0;
