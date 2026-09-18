@@ -49,11 +49,21 @@ export async function getChecker(code: string): Promise<Hunspell> {
 async function loadFile(url: string, key: string): Promise<string> {
   const cached = await cacheGet(key);
   if (cached != null) return cached;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`dictionary download failed (HTTP ${res.status})`);
-  const text = await res.text();
-  await cacheSet(key, text);
-  return text;
+  // jsDelivr is flaky under load — one retry before giving up.
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url);
+    if (res.ok) {
+      const text = await res.text();
+      await cacheSet(key, text);
+      return text;
+    }
+    if (attempt >= 1) {
+      throw new Error(
+        `dictionary download failed (HTTP ${res.status}) for ${url} -> ${res.url}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 750));
+  }
 }
 
 /** A word: a run of letters/digits/apostrophes (Unicode). */
