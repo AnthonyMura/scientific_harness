@@ -1,6 +1,6 @@
 # 27 — PDF citation hover: tooltip with title, authors, DOI
 
-Status: planned (independent branch `feature/pdf-citation-hover`, from `main`)
+Status: in progress (branch `feature/pdf-citation-hover`, from `main`)
 
 ## Request
 
