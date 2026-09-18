@@ -95,7 +95,7 @@ Disabled: opacity .45, no pointer. A disabled button keeps its shape — it neve
 - No UI chrome over the page. Status text (rendering/missing) goes below it in `.muted`.
 - Empty: `.pane-empty` ("No PDF yet — press Compile.").
 
-- Citation markers (`.pdf-cite`, issue 26): invisible hit areas over each `[n]` group in the text layer — transparent at rest, a sand `rgba(179,143,111,.2)` wash on hover (radius-sm, 120 ms); clicking one jumps to the reference entry. Sand is the link token (§4), so the marker reads as clickable without a new hue; gold-bright stays editor-only.
+- Citation markers (`.pdf-cite`, issue 26): visible link-styled boxes over each `[n]` group in the text layer — a quiet sand tint `rgba(179,143,111,.12)` with a 1px sand underline at rest, deepening to a `.35` wash on hover (radius-sm, 120 ms); clicking one jumps to the reference entry. Sand is the link token (§4), so citations read as links without a new hue; gold-bright stays editor-only.
 - Back pill (`.pdf-back-pill`): absolute top-left of the pane (top 44 px — below the 32 px header plus 12 px inset, left 12 px, z-20), raised bg, strong hairline, radius-sm, Inter 600 10px uppercase in taupe with a sand ✕ — the mini-button vocabulary. Label `← back to [3] · p. 2`; appears after a citation jump, dismissed by ✕ / Escape / a new jump / any re-render.
 - The sync flash (`.pdf-sync-flash`) doubles as the jump highlight: sand `.35` wash with a sand ring and soft glow over the target line, `pointer-events: none`, fades out after ~1.6 s — it never intercepts clicks.
 ### 3.8 Run log panel (`.log-panel`)
