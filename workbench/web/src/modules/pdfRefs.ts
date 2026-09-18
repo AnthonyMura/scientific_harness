@@ -7,8 +7,6 @@
 // itself (pdfCitations.scanBibliography). No backend changes: api.fetchRawFile
 // already serves any project file.
 
-import { api } from "../api";
-
 /** Structured info for one citation number — the tooltip's content. */
 export interface RefInfo {
   key?: string; // bib key, when known
@@ -229,7 +227,14 @@ export function parseBbl(text: string): { order: string[]; rawByKey: Map<string,
   const rawByKey = new Map<string, string>();
   for (let i = 0; i < marks.length; i++) {
     const end = i + 1 < marks.length ? marks[i + 1].matchStart : text.length;
-    const raw = text.slice(marks[i].textStart, end).replace(/\s+/g, " ").trim();
+    // The final entry runs to the end of the file — stop at the closing
+    // section command (\end{thebibliography}) so it never leaks in.
+    let raw = "";
+    for (const line of text.slice(marks[i].textStart, end).split("\n")) {
+      if (/^\s*\\end\{/.test(line)) break;
+      raw += line + " ";
+    }
+    raw = raw.replace(/\s+/g, " ").trim();
     if (raw && !rawByKey.has(marks[i].key)) {
       order.push(marks[i].key);
       rawByKey.set(marks[i].key, raw);
@@ -279,8 +284,12 @@ export function assembleRefMap(
 
 const BUILD_DIR = ".workbench/build";
 
+// The api client is imported lazily so this module stays importable from the
+// Node verification harness (which only exercises the pure parsers). Vite
+// merges it into the same chunk as the rest of the app.
 async function readText(path: string): Promise<string | null> {
   try {
+    const { api } = await import("../api");
     const blob = await api.fetchRawFile(path);
     if (!blob) return null;
     return await blob.text();
@@ -294,6 +303,7 @@ async function findFiles(suffix: string): Promise<string[]> {
   const out: string[] = [];
   for (const dir of ["", BUILD_DIR]) {
     try {
+      const { api } = await import("../api");
       const t = await api.tree(dir, true);
       for (const e of t.entries) if (!e.is_dir && e.name.endsWith(suffix)) out.push(e.path);
     } catch {
