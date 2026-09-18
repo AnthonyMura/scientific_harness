@@ -11,6 +11,9 @@ import { bracketMatching, syntaxHighlighting } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { latexLanguage } from "../latexMode";
 import { latexCompletionSource, latexCompletionTheme, reOpenEnvPicker } from "../latexCompletions";
+import { bibLanguage } from "../bibMode";
+import { formatBib } from "../bibFormat";
+import { bibIndex } from "../bibIndex";
 import { vesperHighlight } from "../vesperTheme";
 import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
@@ -61,13 +64,14 @@ export const EDITOR_DEFAULTS: ModuleSettings = {
 const AUTO_SAVE_MS = 1000;
 
 /** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX
- *  (with the Overleaf-style autocomplete overlay); anything else (.txt, .bib,
- *  .json, ...) opens as plain text. */
+ *  (with the Overleaf-style autocomplete overlay), bib/rbib → BibTeX;
+ *  anything else (.txt, .json, ...) opens as plain text. */
 function langForPath(p: string): Extension[] {
   const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
   if (ext === "md" || ext === "markdown") return [markdown()];
   if (ext === "tex" || ext === "sty" || ext === "cls")
     return [latexLanguage, EditorState.languageData.of(() => [{ autocomplete: latexCompletionSource }]), latexCompletionTheme];
+  if (ext === "bib" || ext === "rbib") return [bibLanguage];
   return [];
 }
 
@@ -161,6 +165,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
                 dirtyRef.current = false;
               }
               if (notify) savedRef.current(filePath); // auto-compile on save (M3)
+              if (filePath.endsWith(".bib") || filePath.endsWith(".rbib")) {
+                const root = ctx.projectRoot;
+                if (root) void bibIndex.refresh(root, true); // fresh keys for \citep{…}
+              }
               return true;
             },
             (e: unknown) => {
@@ -270,6 +278,12 @@ export default function EditorPane({ ctx, filePath }: Props) {
     if (v) v.dispatch({});
   }, [settings.spellcheck, settings.spellLang]);
 
+  // Keep the citation index loaded for the open project — \citep{…} lists its
+  // keys; per-file saves force a re-read (see the save callback above).
+  useEffect(() => {
+    if (ctx.projectRoot) void bibIndex.refresh(ctx.projectRoot);
+  }, [ctx.projectRoot]);
+
   // Register this tab's save so Compile can persist open edits before building
   // — a compile reads from disk, unsaved changes would otherwise be lost (M3).
   const registerEditorSave = ctx.registerEditorSave;
@@ -310,6 +324,18 @@ export default function EditorPane({ ctx, filePath }: Props) {
 
   // The compile controls are LaTeX-only: shown when this tab is a .tex file.
   const isTex = !!filePath && filePath.endsWith(".tex");
+  // The Format action is bibliography-only: parse → canonical re-emit, the
+  // same "pretty-print" logic as the JSON view (one undoable change; autosave
+  // persists it). No-op when the document is already canonical.
+  const isBib = !!filePath && (filePath.endsWith(".bib") || filePath.endsWith(".rbib"));
+  const formatBibDoc = () => {
+    const v = viewRef.current;
+    if (!v || !isBib) return;
+    const src = v.state.doc.toString();
+    const out = formatBib(src);
+    if (out === src) return;
+    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: out } });
+  };
 
   // Keep the picker valid and defaulted to the project's main file.
   useEffect(() => {
@@ -354,6 +380,11 @@ export default function EditorPane({ ctx, filePath }: Props) {
         {filePath && (
           <button className="mini" onClick={() => saveRef.current()} disabled={!dirty}>
             Save
+          </button>
+        )}
+        {isBib && (
+          <button className="mini" onClick={formatBibDoc} title="Pretty-print the bibliography (canonical format)">
+            Format
           </button>
         )}
         <span className="head-spacer" />

@@ -21,6 +21,7 @@ import {
   type CompletionSource,
 } from "@codemirror/autocomplete";
 import { indentUnit } from "@codemirror/language";
+import { bibIndex } from "./bibIndex";
 
 // ---------------------------------------------------------------------------
 // Environments (completed inside \begin{…} / \end{…})
@@ -122,6 +123,11 @@ const COMMANDS: CmdSpec[] = [
   ["ref", "cross-reference to a \\label", "\\ref{$0}", secStructure],
   ["pageref", "page number of a \\label", "\\pageref{$0}", secStructure],
   ["cite", "citation by key (BibTeX / Zotero)", "\\cite{$0}", secStructure],
+  ["citet", "citation — author in text (natbib)", "\\citet{$0}", secStructure],
+  ["citep", "citation — parenthetical (natbib)", "\\citep{$0}", secStructure],
+  ["citealp", "parenthetical citation, no parentheses (natbib)", "\\citealp{$0}", secStructure],
+  ["citealt", "author-year citation, no parentheses (natbib)", "\\citealt{$0}", secStructure],
+  ["fullcite", "full citation — author + title + year (natbib)", "\\fullcite{$0}", secStructure],
   ["footnote", "footnote text", "\\footnote{$0}", secStructure],
   ["bibitem", "bibliography entry (thebibliography)", "\\bibitem{$0}", secStructure],
   ["include", "input another file, starting a new page", "\\include{$0}", secStructure],
@@ -495,6 +501,11 @@ const ENV_NAME_RE = /\\(begin|end)[ \t]*\{[ \t]*([a-zA-Z]*)/;
 const CMD_RE = /\\[a-zA-Z]*/;
 const BARE_ENV_RE = /\\(begin|end)([a-zA-Z]*)$/;
 
+// Citation key inside \citep{…} & kin (incl. starred forms and an optional
+// [prenote] argument). Group 2 is the text already typed inside the braces.
+const CITE_ARG_RE = /\\(cite|citet|citep|citealp|citealt|fullcite)\*?(?:[\t ]*\[[^\]\n]*\])*[\t ]*\{([^{}\n]*)/;
+const secCite: CompletionSection = { name: "References", rank: 0 };
+
 /** Completion source for LaTeX files. Two contexts: an environment name
  *  inside an open \begin{…} / \end{…}, and a command name (\ + letters)
  *  ending at the caret. */
@@ -525,6 +536,30 @@ export const latexCompletionSource: CompletionSource = (context) => {
       options = ENV_OPTIONS;
     }
     return { from: nameFrom, to: context.pos, options, validFor: /^[a-zA-Z*]*$/ };
+  }
+
+  // Citation key inside \citep{…} & kin — keys from the project's .bib files,
+  // filtered as the current key (text after the last comma) is typed. The
+  // overlay stays open across commas so several keys complete in one flow.
+  const citeM = context.matchBefore(CITE_ARG_RE);
+  if (citeM) {
+    const entries = bibIndex.all();
+    if (entries.length > 0) {
+      const m = CITE_ARG_RE.exec(citeM.text)!;
+      const inner = m[2] || "";
+      // The current key is the text after the last comma — completing one
+      // key must not clobber the ones already typed before it.
+      const comma = inner.lastIndexOf(",");
+      const segLen = comma < 0 ? inner.length : inner.length - comma - 1;
+      const keyFrom = citeM.from + citeM.text.length - segLen;
+      const options: Completion[] = entries.map((e) => ({
+        label: e.key,
+        detail: e.hint,
+        section: secCite,
+        validFor: /[a-zA-Z0-9_\-,: ]*/,
+      }));
+      return { from: keyFrom, to: context.pos, options };
+    }
   }
 
   // A bare \\begin / \\end (no braces yet) also picks an environment
