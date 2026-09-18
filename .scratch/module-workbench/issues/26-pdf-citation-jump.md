@@ -162,3 +162,5 @@ Implementation notes (2026-09-18):
 - `BibEntry` gained two fields beyond the ticket's interface — `x1Px` (first-line extent, sizes the flash box) and `lineHpx` (vertical centering) — a minimal extension of the same shape.
 - The module exports one helper beyond the ticket's list: `bibStartLines(pages)` — per-page index of the References heading line (0 for later pages, -1 when absent). The viewer uses it to unmark `[N]` groups on/after the heading so bibliography entry labels are never rendered as clickable citations.
 - The back pill restores the exact clicked position: the original `scrollLeft` is saved with the target and restored verbatim (a recomputed offset drifts once the page has scrolled horizontally).
+
+Design revision (2026-09-18): markers were transparent at rest (only a 20% hover tint) and read as plain text — users could not discover them. They are now visibly link-styled: sand tint + underline at rest, stronger wash on hover; the pad widened 1 → 2 px (`CITE_MARKER_PAD`, exported so the viewer's unmark pass stays in sync).
