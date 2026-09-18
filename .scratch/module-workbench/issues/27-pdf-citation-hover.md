@@ -1,6 +1,6 @@
 # 27 — PDF citation hover: tooltip with title, authors, DOI
 
-Status: in progress (branch `feature/pdf-citation-hover`, from `main`)
+Status: resolved (implemented and verified on branch `feature/pdf-citation-hover`, from `main`)
 
 ## Request
 
@@ -106,6 +106,30 @@ text). No status chip — data absence is not an error state.
   mode (Save As a copy of the compiled PDF into the project, then open it) →
   tooltip shows the raw entry text instead.
 
+### Results
+
+- **Node harness** (`workbench/web/verify/pdf-refs.mjs`, Node 22
+  `--experimental-strip-types`): **30/30** — aux: real natbib nested
+  `\bibcite{key}{{n}{year}{label}}` form mapped, simple flat numeric form
+  accepted, author-year labels ignored, `\bibitem` order fallback, `\bibdata`
+  names; BibTeX: multi-line/quoted/bare values, missing fields, `and` in
+  authors, comments and `@string`/`@comment` dropped; bbl: order + raw text
+  (section-end guard); RefMap assembly end-to-end (numbered aux+bib and the
+  bbl-only path).
+- `tsc --noEmit` + `vite build` clean in WSL.
+- **CDP** (`test-latex-project/cdp_tooltip_test.mjs`, real mouse events):
+  **14/14** — compiled mode: tooltip appeared 298 ms after resting on `[4]`
+  with title / "Smith, John and Doe, Anna" / `doi: 10.5555/jt.2023.001`;
+  group marker `[1, 3]` resolved via its first number (doe2020) and showed no
+  doi line (the entry has none); a second citation re-shows with its own entry;
+  leave → hidden; click → dismissed; pointer-events none / z-40 confirmed.
+  Static mode (`saved-output.pdf`, a copy of the compiled PDF): tooltip shows
+  the raw entry text ("[1] Anna Doe. Another Book on the Same Topic. …") with
+  no structured divs; leave → hidden.
+- Fixture note: DOIs added to `cite-demo/refs.bib` (all entries except
+  doe2020, which stays doi-less to exercise the conditional); plainnat does not
+  print DOIs, so the static-mode PDF correctly lacks them.
+
 ## Coordination with issue 26 (citation jump)
 
 Recommended order: **26 first** — then step 3's geometry is marker-based
@@ -117,3 +141,4 @@ unaffected).
 ## Comments
 
 (created from the user request; implementation starts after plan acceptance)
+(implemented and verified on `feature/pdf-citation-hover`: refs module + Node harness, tooltip wiring, styles, docs; CDP 14/14 incl. static mode. One deviation from the plan: issue 26 had already merged, so the tooltip attaches to its `.pdf-cite` markers as recommended — no local scan was written.)
