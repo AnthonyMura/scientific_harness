@@ -18,6 +18,8 @@ import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
 import { GearIcon } from "../icons";
+import { DICTIONARY_OPTIONS, DEFAULT_DICTIONARY_LABEL } from "../spellcheck/dictionaries";
+import { spellDecoField, spellcheckPlugin, type SpellStatus } from "../spellcheck/decorations";
 
 export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "fontSize", label: "Font size", min: 10, max: 28, step: 1, unit: "px" },
@@ -36,10 +38,19 @@ export const EDITOR_SETTINGS: SettingControl[] = [
     visibleWhen: { key: "cursorType", value: "line" },
   },
   { kind: "toggle", key: "smoothCursor", label: "Smooth cursor motion" },
+  { kind: "toggle", key: "spellcheck", label: "Spell check" },
+  {
+    kind: "select",
+    key: "spellLang",
+    label: "Dictionary",
+    options: DICTIONARY_OPTIONS,
+    visibleWhen: { key: "spellcheck", value: true },
+  },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = {
   fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line",
   cursorLineWidth: 1.2, smoothCursor: true,
+  spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL,
 };
 
 /** Autosave debounce: the disk follows the last keystroke after this pause. */
@@ -97,6 +108,14 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const [gearOpen, setGearOpen] = useState<{ x: number; y: number } | null>(null);
   /** Which .tex file the Compile button builds (per tab; defaults to the main file). */
   const [pick, setPick] = useState<string>("");
+  /** Live mirror of the spell-check settings for the view plugin (stable closure). */
+  const spellRef = useRef({ enabled: true, lang: DEFAULT_DICTIONARY_LABEL });
+  spellRef.current = {
+    enabled: !!settings.spellcheck,
+    lang: typeof settings.spellLang === "string" ? settings.spellLang : DEFAULT_DICTIONARY_LABEL,
+  };
+  /** Dictionary load state for the pane-header note (loading / error only). */
+  const [spellStatus, setSpellStatus] = useState<SpellStatus>("idle");
 
   /** Select a whole line and center it in the viewport (inverse search). */
   const applyGoto = (view: EditorView, lineNo: number) => {
@@ -169,6 +188,12 @@ export default function EditorPane({ ctx, filePath }: Props) {
             bracketMatching(),
             syntaxHighlighting(vesperHighlight),
             drawSelection(),
+            spellDecoField,
+            spellcheckPlugin({
+              getEnabled: () => spellRef.current.enabled,
+              getLang: () => spellRef.current.lang,
+              onStatus: setSpellStatus,
+            }),
             vesperChrome,
             keymap.of([
               ...defaultKeymap,
@@ -290,6 +315,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
   const cursorType = typeof settings.cursorType === "string" ? settings.cursorType : "line";
   const cursorLineWidth = typeof settings.cursorLineWidth === "number" ? settings.cursorLineWidth : 1.2;
   const smoothCursor = !!settings.smoothCursor;
+  const spellOn = !!settings.spellcheck;
 
   return (
     <div
@@ -303,6 +329,14 @@ export default function EditorPane({ ctx, filePath }: Props) {
       <div className="pane-header">
         <span>{filePath ?? "no file selected"}</span>
         <span className={"dot" + (dirty ? " dirty" : "")} title={dirty ? "unsaved changes" : "saved"} />
+        {spellOn && spellStatus === "loading" && (
+          <span className="spell-status">dictionary…</span>
+        )}
+        {spellOn && spellStatus === "error" && (
+          <span className="spell-status err" title="Dictionary download failed — check the connection and try again">
+            dictionary failed
+          </span>
+        )}
         {filePath && (
           <button className="mini" onClick={() => saveRef.current()} disabled={!dirty}>
             Save

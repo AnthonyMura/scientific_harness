@@ -12,7 +12,7 @@ export interface SettingControl {
   /** Allowed values for `kind: "select"` controls. */
   options?: readonly string[];
   /** When set, the row is shown only while another setting has this value — a sub-setting. */
-  visibleWhen?: { key: string; value: string };
+  visibleWhen?: { key: string; value: SettingValue };
 }
 
 export type SettingValue = number | boolean | string;
