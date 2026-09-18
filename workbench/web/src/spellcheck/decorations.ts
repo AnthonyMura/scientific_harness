@@ -99,7 +99,8 @@ export function spellcheckPlugin(opts: SpellcheckOptions) {
           );
           view.dispatch({ effects: setSpellDeco.of(Decoration.set(ranges)) });
           opts.onStatus?.("ready");
-        } catch {
+        } catch (e) {
+          console.error("spellcheck:", e);
           if (this.dead || id !== this.checkId) return; // stale or gone
           // Dictionary unavailable (offline / CDN down): no marks, surface it.
           view.dispatch({ effects: setSpellDeco.of(Decoration.none) });
