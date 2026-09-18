@@ -98,6 +98,8 @@ export const api = {
   deletePath: (path: string) => request<{ ok: boolean }>("POST", "/api/files/delete", { path }),
   /** All .tex files in the project - for the compile picker and main-file setting. */
   texFiles: () => request<{ files: string[] }>("GET", "/api/files/tex"),
+  /** All .bib files in the project - feeds citation-key autocomplete. */
+  bibFiles: () => request<{ files: string[] }>("GET", "/api/files/bib"),
   /** Copy a project file to another project path (Save As / duplicate). */
   copyFile: (from: string, to: string) =>
     request<{ from: string; to: string }>("POST", "/api/files/copy", { from, to }),
