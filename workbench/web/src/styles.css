@@ -257,7 +257,10 @@ input::placeholder { color: var(--text-3); }
   flex-direction: column;
 }
 .editor-pane { background: var(--bg-base); }
-.pdf-pane { border-right: none; }
+.pdf-pane {
+  border-right: none;
+  position: relative; /* anchor for the back pill (issue 26) */
+}
 
 .pane-header {
   display: flex;
@@ -433,6 +436,60 @@ input::placeholder { color: var(--text-3); }
   100% {
     opacity: 0;
   }
+}
+
+/* Citation marker (issue 26): a transparent clickable box over each [...]
+   group in the text layer. Sand is the token for links (§4); gold-bright stays
+   editor-only. */
+.pdf-cite {
+  position: absolute;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 120ms ease;
+}
+.pdf-cite:hover {
+  background: rgba(179, 143, 111, 0.2);
+}
+
+/* Back pill (issue 26): returns to the clicked citation. Top-left below the
+   pane header (32px single-line header + 12px inset), above the pages. */
+.pdf-back-pill {
+  position: absolute;
+  top: 44px;
+  left: 12px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  padding: 3px 4px 3px 9px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.pdf-back-pill button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.pdf-back-pill button:hover {
+  color: var(--pearl);
+}
+.pdf-back-pill-x {
+  padding: 0 4px !important;
+  opacity: 0.7;
 }
 
 /* ---------- run log ---------------------------------------- */
