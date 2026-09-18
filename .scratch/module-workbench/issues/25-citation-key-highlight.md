@@ -1,6 +1,6 @@
 # 25 — Citation key highlight: author names in \citep{…} & kin, brick red
 
-Status: open (2026-09-18)
+Status: resolved (2026-09-18, main; code commits a26b448..354608d)
 
 ## Scope
 
@@ -37,13 +37,13 @@ Optional `[prenote]`/`[postnote]` arguments stay default-colored; `\nocite`
    Commit: `web(core): …`.
 3. **Tokenizer** — latexMode.ts state machine + tokenTable. Commit:
    `module(editor): …`.
-4. **Docs** — README status line, plan progress note, ticket verification +
-   resolved status. Commits: `docs(readme)`, `docs(workbench)`,
-   `docs(scratch)`.
+4. **Docs** — README status line, plan progress note, theme spec
+   (`app_theme.md`), ticket verification + resolved status. Commits:
+   `docs(readme)`, `docs(workbench)`, `docs(theme)`, `docs(scratch)`.
 
 ## Verification
 
-Planned (to be filled in at resolution):
+Done (2026-09-18):
 
 - Tokenizer harness (Node 22, `--experimental-strip-types`): parses a sample
   document through the real `latexLanguage` extension and asserts styled
@@ -54,7 +54,8 @@ Planned (to be filled in at resolution):
     color correctly (no parser hang — the stream guard would throw).
   - `\nocite{…}`, comment text, and non-cite command arguments stay uncolored;
     structural commands keep `keyword.special` (gold-bright).
-- `tsc --noEmit` + `vite build` clean.
+- `tsc --noEmit` clean; `vite build` clean (pre-existing chunk-size and
+  hunspell externalization notes only).
 
 ## Comments
 
