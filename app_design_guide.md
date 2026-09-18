@@ -95,6 +95,9 @@ Disabled: opacity .45, no pointer. A disabled button keeps its shape — it neve
 - No UI chrome over the page. Status text (rendering/missing) goes below it in `.muted`.
 - Empty: `.pane-empty` ("No PDF yet — press Compile.").
 
+- Citation markers (`.pdf-cite`, issue 26): invisible hit areas over each `[n]` group in the text layer — transparent at rest, a sand `rgba(179,143,111,.2)` wash on hover (radius-sm, 120 ms); clicking one jumps to the reference entry. Sand is the link token (§4), so the marker reads as clickable without a new hue; gold-bright stays editor-only.
+- Back pill (`.pdf-back-pill`): absolute top-left of the pane (top 44 px — below the 32 px header plus 12 px inset, left 12 px, z-20), raised bg, strong hairline, radius-sm, Inter 600 10px uppercase in taupe with a sand ✕ — the mini-button vocabulary. Label `← back to [3] · p. 2`; appears after a citation jump, dismissed by ✕ / Escape / a new jump / any re-render.
+- The sync flash (`.pdf-sync-flash`) doubles as the jump highlight: sand `.35` wash with a sand ring and soft glow over the target line, `pointer-events: none`, fades out after ~1.6 s — it never intercepts clicks.
 ### 3.8 Run log panel (`.log-panel`)
 
 Fixed 200px bottom row, pane background, hairline top border.
@@ -149,7 +152,7 @@ Who may use what:
 | brick `#7B1612` | the one primary action per view, banner border | large-area fills, text |
 | crimson `#710014` | hover of brick only | anything else |
 | burgundy / maroon | tints (`--err-tint`), warm shadows | text, borders at full strength |
-| sand `#B38F6F` | focus rings, active rules, links, success status, LaTeX commands, dots | body text |
+| sand `#B38F6F` | focus rings, active rules, links (incl. PDF citation markers + back pill), success status, LaTeX commands, dots | body text |
 | gold-bright `#C3A893` | editor skeleton tokens, dev badge | outside the editor (badge is the one exception) |
 | pearl `#F2F1ED` | primary text, PDF page, caret/cursor | fills other than the paper |
 | taupe `#BCB1A0` | secondary text, delimiters, log stream | primary content |
