@@ -1,12 +1,13 @@
-# 25 — Citation key highlight: author names in \citep{…} & kin, brick red
+# 25 — Citation key highlight: author names in \citep{…} & kin, gold-bright (warm bone)
 
-Status: resolved (2026-09-18, main; code commits a26b448..354608d)
+Status: resolved (2026-09-18, main; code commits a26b448..354608d; colour revised to gold-bright in 83e9314)
 
 ## Scope
 
 In the editor's LaTeX regime (.tex), the author names inside citation
 commands — `\citep{smith2023,jones2024}` and its siblings — render in the
-theme's brick red (`--brick`) so references stand out of the manuscript.
+theme's warm bone neutral (gold-bright, `--gold-bright`), standing out of the
+manuscript without shouting.
 The command itself keeps its sand keyword color; only the keys inside the
 required `{…}` argument are highlighted.
 
@@ -27,8 +28,8 @@ Optional `[prenote]`/`[postnote]` arguments stay default-colored; `\nocite`
   maps the token name to its own Lezer tag — deliberately not `t.link`, which
   the shared Markdown mode also emits (links stay unstyled per the theme).
 - **Theme** (`web/src/vesperTheme.ts`) — one new rule:
-  `{ tag: t.special(t.atom), color: "var(--brick)" }`. Token-only, no raw hex
-  in components (app_design_guide.md rule 2).
+  `{ tag: t.special(t.atom), color: "var(--gold-bright)" }` — the warm bone.
+  Token-only, no raw hex in components (app_design_guide.md rule 2).
 
 ## Implementation steps (one commit each)
 
@@ -59,7 +60,11 @@ Done (2026-09-18):
 
 ## Comments
 
-Brick on the editor canvas (`--bg-base`) is a deliberate low-contrast accent
-(≈1.7:1) — the theme's red family has no lighter text-safe member except
-`--err`. If the keys need to pop more, the rule is a one-line switch to
-`var(--err)` or a lifted brick variant.
+Colour revision (2026-09-18): brick was tried first per the original request,
+but it read too loud for inline text — a saturated hue punch that belongs on
+the Compile button, not in the manuscript. Settled on `--gold-bright`
+(`#C3A893`), the theme's warm bone: ≈8:1 on canvas, brighter than command sand
+so keys stand out of prose while staying in the attention family. Rejected:
+taupe (the braces' own colour — keys would dissolve into `{…}`), sand (the
+commands' own colour — keys lose their identity), a new "bone" token (the
+palette is nine anchors, each with one job).
