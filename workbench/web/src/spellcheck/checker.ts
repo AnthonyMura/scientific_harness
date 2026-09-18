@@ -1,11 +1,27 @@
 // Spell-check service (issue 24): one Hunspell instance per language, created
 // from the aff/dic pair fetched (and cached) for it. The WASM module itself is
-// loaded once by hunspell-wasm on first use.
-import { createHunspellFromStrings, type Hunspell } from "hunspell-wasm";
+// loaded once on first use.
+import { Hunspell } from "hunspell-wasm";
+import initHunspellWasm from "hunspell-wasm/wasm/hunspell.js";
 import { dictionaryUrls } from "./dictionaries";
 import { cacheGet, cacheSet } from "./cache";
 
 const instances = new Map<string, Promise<Hunspell>>();
+
+// The package's getWasmModule() resolves the .wasm relative to its own module URL
+// (new URL("hunspell.wasm", import.meta.url)), which lands inside Vite's deps
+// directory in dev mode and 404s. Pin it to /hunspell.wasm instead — served from
+// web/public in both dev and build.
+let wasmPromise: Promise<unknown> | null = null;
+function getWasmModule(): Promise<unknown> {
+  if (!wasmPromise) {
+    wasmPromise = initHunspellWasm({ locateFile: () => "/hunspell.wasm" }).catch((e) => {
+      wasmPromise = null; // transient failure — allow a retry
+      throw e;
+    });
+  }
+  return wasmPromise;
+}
 
 /** Resolve (and memoize) the Hunspell instance for a dictionary code. */
 export async function getChecker(code: string): Promise<Hunspell> {
@@ -13,11 +29,12 @@ export async function getChecker(code: string): Promise<Hunspell> {
   if (!pending) {
     pending = (async () => {
       const urls = dictionaryUrls(code);
-      const [aff, dic] = await Promise.all([
+      const [wasm, aff, dic] = await Promise.all([
+        getWasmModule(),
         loadFile(urls.aff, `${code}.aff`),
         loadFile(urls.dic, `${code}.dic`),
       ]);
-      return createHunspellFromStrings(aff, dic);
+      return new Hunspell(wasm, aff, dic);
     })();
     instances.set(code, pending);
     // A failed load (offline, CDN down) must not poison the registry — evict
