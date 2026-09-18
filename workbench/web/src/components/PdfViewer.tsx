@@ -17,6 +17,8 @@ import { forwardLookup, parseSynctex, reverseLookup } from "../modules/synctex";
 import type { SynctexData } from "../modules/synctex";
 import { CITE_MARKER_PAD, bibStartLines, scanBibliography, scanPage } from "../modules/pdfCitations";
 import type { BibEntry, Box, CiteGroup, LineItem } from "../modules/pdfCitations";
+import { loadCompiledRefs } from "../modules/pdfRefs";
+import type { RefMap } from "../modules/pdfRefs";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
@@ -81,6 +83,17 @@ export default function PdfViewer({ ctx }: Props) {
   const citeIndexRef = useRef<{ page: number; group: CiteGroup }[]>([]);
   const pageLinesRef = useRef<LineItem[][]>([]);
   const bibIndexRef = useRef<Map<number, BibEntry>>(new Map());
+  // Citation hover tooltip (issue 27): reference data for what is on screen —
+  // structured (aux/bib) when readable, otherwise the raw entry text from the
+  // PDF's own References section. Rebuilt at the end of each render pass; a
+  // successful compiled-refs load overwrites it with structured data.
+  const refsRef = useRef<RefMap | null>(null);
+  // Last successful compiled-refs load, keyed by (stem, version) so a slow
+  // response from an earlier compile never applies to a newer one.
+  const refsCacheRef = useRef<{ key: string; map: RefMap } | null>(null);
+  // The tooltip's hide(), exposed to the click and render effects.
+  const tipHideRef = useRef<(() => void) | null>(null);
+  const paneRef = useRef<HTMLDivElement>(null);
   // Where the user clicked a citation — the back pill returns here.
   const [backTarget, setBackTarget] = useState<{ page: number; box: Box; label: string; left: number } | null>(null);
 
@@ -144,6 +157,8 @@ export default function PdfViewer({ ctx }: Props) {
         pageLinesRef.current = [];
         bibIndexRef.current = new Map();
         setBackTarget(null);
+        refsRef.current = null; // no stale tooltip data across re-renders
+        tipHideRef.current?.();
         setStatus(`rendering ${doc.numPages} page(s)…`);
         for (let i = 1; i <= doc.numPages; i++) {
           if (cancelled) break;
@@ -211,6 +226,16 @@ export default function PdfViewer({ ctx }: Props) {
               }
             }
           }
+          // Tooltip fallback data (issue 27): the entry text as printed in the
+          // PDF's own References section — used in static mode and whenever the
+          // aux/bib read comes up empty. A structured load for this exact key
+          // overwrites it if it already landed (either completion order is
+          // fine: the fetch checks cancellation, the pass re-applies the cache).
+          const rawRefs: RefMap = new Map();
+          for (const [n, entry] of bibIndexRef.current) rawRefs.set(n, { raw: entry.lines.join(" ") });
+          refsRef.current = rawRefs;
+          const key = pdfFile ? `static@${pdfFile}` : `${(ctx.pdfArtifact?.pdf ?? "main.pdf").replace(/\.pdf$/, "")}@${outputTick}`;
+          if (refsCacheRef.current?.key === key) refsRef.current = refsCacheRef.current.map;
           setStatus("");
         }
       } catch (e) {
@@ -222,6 +247,31 @@ export default function PdfViewer({ ctx }: Props) {
       for (const l of textLayers) l.cancel();
     };
   }, [ctx.projectOpen, ctx.projectRoot, outputTick, zoom, pdfFile, ctx.pdfArtifact]);
+
+  // Compiled reference data for the tooltip (issue 27): once per (version,
+  // stem). Static files have no aux/bib to read — their data is the raw entry
+  // text built by the render pass. Failures degrade silently: the tooltip then
+  // shows the PDF's own References text instead. No status chip — data absence
+  // is not an error state.
+  useEffect(() => {
+    if (!ctx.projectOpen || pdfFile) return;
+    const key = `${(ctx.pdfArtifact?.pdf ?? "main.pdf").replace(/\.pdf$/, "")}@${outputTick}`;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stem = (ctx.pdfArtifact?.pdf ?? "main.pdf").replace(/\.pdf$/, "");
+        const map = await loadCompiledRefs(stem);
+        if (cancelled || !map) return;
+        refsCacheRef.current = { key, map };
+        refsRef.current = map;
+      } catch {
+        /* silent: the tooltip falls back to raw entry text */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ctx.projectOpen, ctx.projectRoot, outputTick, pdfFile, ctx.pdfArtifact]);
 
   // Forward search (M3): editor click → scroll to the line + flash it.
   useEffect(() => {
@@ -287,6 +337,7 @@ export default function PdfViewer({ ctx }: Props) {
       downY = e.clientY;
     };
     const onClick = (e: MouseEvent) => {
+      tipHideRef.current?.(); // a click dismisses the tooltip (issue 27)
       if (Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5) return;
       const pageDiv = (e.target as HTMLElement).closest(".pdf-page") as HTMLElement | null;
       if (!pageDiv) return;
@@ -358,6 +409,153 @@ export default function PdfViewer({ ctx }: Props) {
     return () => {
       host.removeEventListener("pointerdown", onDown);
       host.removeEventListener("click", onClick);
+    };
+  }, []);
+
+  // Citation hover tooltip (issue 27): an imperative node in .pdf-pane — a
+  // small card with the reference's title, authors and DOI (or the raw entry
+  // text when only the PDF's own References section is available). Shown 200 ms
+  // after the pointer rests on a .pdf-cite marker; leave / scroll / click /
+  // re-render hide it at once; moving between adjacent citations swaps the
+  // content in place. No animation (v0 motion rule).
+  useEffect(() => {
+    const host = hostRef.current;
+    const pane = paneRef.current;
+    if (!host || !pane) return;
+    let tip: HTMLDivElement | null = null;
+    let timer: number | undefined;
+    let target: HTMLElement | null = null; // marker shown, or pending its timer
+    let lastX = 0;
+    let lastY = 0;
+
+    const ensureTip = () => {
+      if (!tip) {
+        tip = document.createElement("div");
+        tip.className = "pdf-cite-tip";
+        tip.style.display = "none";
+        pane.appendChild(tip);
+      }
+      return tip;
+    };
+    const hide = () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      target = null;
+      if (tip) tip.style.display = "none";
+    };
+    tipHideRef.current = hide;
+
+    // Fill the tooltip from the reference data for the marker's first number.
+    const fillTip = (marker: HTMLElement): boolean => {
+      const el = ensureTip();
+      el.textContent = "";
+      const n = parseInt(marker.dataset.cite?.split(",")[0] ?? "", 10);
+      if (!Number.isFinite(n)) return false;
+      const info = refsRef.current?.get(n);
+      if (!info) return false;
+      if (info.title || info.authors || info.doi) {
+        if (info.title) {
+          const t = document.createElement("div");
+          t.className = "pdf-cite-tip-title";
+          t.textContent = info.title;
+          el.appendChild(t);
+        }
+        if (info.authors) {
+          const a = document.createElement("div");
+          a.className = "pdf-cite-tip-authors";
+          a.textContent = info.authors;
+          el.appendChild(a);
+        }
+        if (info.doi) {
+          const d = document.createElement("div");
+          d.className = "pdf-cite-tip-doi";
+          d.textContent = `doi: ${info.doi}`;
+          el.appendChild(d);
+        }
+      } else if (info.raw) {
+        const r = document.createElement("div");
+        r.className = "pdf-cite-tip-raw";
+        r.textContent = info.raw;
+        el.appendChild(r);
+      } else {
+        return false;
+      }
+      return true;
+    };
+
+    // Fixed at cursor + (12, 16); flipped above the cursor when it would
+    // overflow the viewport bottom, clamped horizontally.
+    const position = () => {
+      if (!tip) return;
+      const w = tip.offsetWidth;
+      const h = tip.offsetHeight;
+      let x = lastX + 12;
+      let y = lastY + 16;
+      if (y + h > window.innerHeight - 8) y = lastY - h - 12;
+      x = Math.max(8, Math.min(x, window.innerWidth - w - 8));
+      tip.style.left = `${x}px`;
+      tip.style.top = `${y}px`;
+    };
+
+    const onOver = (e: MouseEvent) => {
+      const m = (e.target as HTMLElement).closest?.(".pdf-cite") as HTMLElement | null;
+      if (!m) return;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+        timer = undefined;
+      }
+      if (target === m && tip && tip.style.display !== "none") return; // already here
+      target = m;
+      const el = ensureTip();
+      if (el.style.display !== "none") {
+        // Moving between adjacent citations: swap content in place, no flicker.
+        if (fillTip(m)) position();
+        else hide();
+        return;
+      }
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        const t = target;
+        if (!t) return;
+        if (fillTip(t)) {
+          el.style.display = "block";
+          position();
+        }
+      }, 200);
+    };
+
+    const onOut = (e: MouseEvent) => {
+      const m = (e.target as HTMLElement).closest?.(".pdf-cite") as HTMLElement | null;
+      if (!m || m !== target) return;
+      // Straight onto another citation? The next mouseover swaps in place.
+      const next = (e.relatedTarget as Element | null)?.closest?.(".pdf-cite");
+      if (next) return;
+      hide();
+    };
+
+    const onMove = (e: MouseEvent) => {
+      lastX = e.clientX;
+      lastY = e.clientY;
+      if (tip && tip.style.display === "none") return; // pending — position on show
+      if (target) position();
+    };
+
+    host.addEventListener("mouseover", onOver);
+    host.addEventListener("mouseout", onOut);
+    host.addEventListener("mousemove", onMove);
+    host.addEventListener("scroll", hide, { passive: true });
+    return () => {
+      host.removeEventListener("mouseover", onOver);
+      host.removeEventListener("mouseout", onOut);
+      host.removeEventListener("mousemove", onMove);
+      host.removeEventListener("scroll", hide);
+      tipHideRef.current = null;
+      hide();
+      tip?.remove();
     };
   }, []);
 
@@ -469,7 +667,7 @@ export default function PdfViewer({ ctx }: Props) {
     !!compileJob && (compileJob.status === "error" || (compileJob.status === "done" && compileJob.exit_code !== 0));
 
   return (
-    <div className="pdf-pane">
+    <div className="pdf-pane" ref={paneRef}>
       <div className="pane-header">
         {pdfFile ? (
           <>
