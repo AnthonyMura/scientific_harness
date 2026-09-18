@@ -263,6 +263,13 @@ export default function EditorPane({ ctx, filePath }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
 
+  // The spell-check plugin reads its settings through getters but only on a
+  // transaction — force one when they change so toggles apply live (issue 24).
+  useEffect(() => {
+    const v = viewRef.current;
+    if (v) v.dispatch({});
+  }, [settings.spellcheck, settings.spellLang]);
+
   // Register this tab's save so Compile can persist open edits before building
   // — a compile reads from disk, unsaved changes would otherwise be lost (M3).
   const registerEditorSave = ctx.registerEditorSave;
