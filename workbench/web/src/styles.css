@@ -494,12 +494,14 @@ input::placeholder { color: var(--text-3); }
   opacity: 0.7;
 }
 
-/* Citation tooltip (issues 27/34): a small fixed card with each reference in
-   the hovered group's title, authors and DOI — or the raw entry text from the
-   PDF's own References section when no structured data is available. Group
+/* Citation tooltip (issues 27/34/35): a small fixed card with each reference
+   in the hovered group's title, authors and DOI — or the raw entry text from
+   the PDF's own References section when no structured data is available. Group
    citations ([2,3]) list every entry, capped at six with a "… plus N more"
-   line (issue 34). pointer-events: none so it never steals the hover;
-   shown/hidden imperatively (no animation, v0 rule). */
+   line (issue 34). Interactive (issue 35): pointer-events auto so the pointer
+   can rest on the card — select/copy its text, follow the DOI link; a grace
+   period in PdfViewer bridges the gap between marker and card. Shown/hidden
+   imperatively (no animation, v0 rule). */
 .pdf-cite-tip {
   position: fixed;
   z-index: 40;
@@ -509,7 +511,9 @@ input::placeholder { color: var(--text-3); }
   border-radius: var(--radius-md);
   padding: 8px 10px;
   box-shadow: var(--shadow-pop);
-  pointer-events: none;
+  pointer-events: auto;
+  user-select: text;
+  cursor: default;
 }
 .pdf-cite-tip-title {
   font-family: var(--font-ui);
@@ -539,6 +543,11 @@ input::placeholder { color: var(--text-3); }
   color: var(--sand);
   margin-top: 4px;
   word-break: break-all;
+}
+.pdf-cite-tip-doi a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .pdf-cite-tip-raw {
   font-family: var(--font-ui);
