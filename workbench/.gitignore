@@ -15,3 +15,6 @@ app/workbench-shell.log
 
 # in-app TinyTeX (hidden TeX Live used only by the app)
 .texlive/
+
+# spell-check WASM binary: copied from node_modules by web/scripts/copy-hunspell-wasm.mjs (postinstall)
+web/public/hunspell.wasm
