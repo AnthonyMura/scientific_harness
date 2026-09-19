@@ -72,3 +72,25 @@ Opening a `.bib`/`.rbib` file in the editor gives it two things:
   name sand rgb(179,143,111), brace taupe rgb(188,177,160)), Format button
   present on the .bib tab and absent on .tex, one click canonicalized the
   padded refs.bib on disk (second click a no-op).
+
+- Bug fix 2026-09-19 (minkota office machine, real-world report): the user's
+  actual manuscript bibliography (Zotero export, 1658 lines) rendered with
+  almost no highlighting — only the first entry got tags; every later entry was
+  untagged prose with stray taupe braces, and text after `%` inside abstracts
+  showed as brown-italic comment. Root cause: the tokenizer started a `%`
+  comment to end of line even inside multi-line braced values (BibTeX has no %
+  comments; in real exports % is literal text, e.g. "95\% confidence
+  interval"), so the value's closing brace was swallowed and depth tracking
+  desynced — the entry-closing `}` brought depth back to 0 but the phase stayed
+  in fields, so every subsequent `@type{...}` header was mis-parsed (`{` read
+  as a value opener) and no entry after it ever highlighted again. Fix in
+  `bibMode.ts`: `%` only starts a comment outside values (depth > 0 or an open
+  multi-line quoted value); an `@` header found where a field is expected
+  resyncs to top level; unterminated quoted values continue across lines
+  (`state.quoted`). Verified: harness extended to 16/16 (new regression cases:
+  % in multi-line value, recovery after forced desync, multi-line quoted
+  value); full parse of the real file tags all 95 entries' headers/keys and
+  1294 field names (was 1/1/5); headless Chrome CDP on the live app with the
+  real references.bib — @book/@article gold-bright rgb(195,168,147) weight 600,
+  keys gold-bright, field names sand rgb(179,143,111), `%` in abstracts plain
+  prose (not comment).
