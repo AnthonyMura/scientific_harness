@@ -375,6 +375,17 @@ input::placeholder { color: var(--text-3); }
 }
 .spell-status { color: var(--text-3); }
 .spell-status.err { color: var(--err); }
+/* Paragraph position tags (issue 30): a low-contrast taupe marker before each
+   .tex text paragraph — a ::before decoration on the tagged line, never
+   document content. user-select keeps it out of copied/selected text. */
+.cm-line.tex-pos-tag::before {
+  content: attr(data-tag);
+  color: rgba(188, 177, 160, 0.35); /* taupe, low contrast */
+  font-family: var(--font-mono);
+  font-size: 0.62em;
+  margin-right: 10px;
+  user-select: none;
+}
 
 /* ---------- PDF viewer ------------------------------------- */
 
