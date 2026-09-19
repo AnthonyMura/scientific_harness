@@ -27,6 +27,7 @@ import {
   dictionaryCodeForLabel,
 } from "../spellcheck/dictionaries";
 import { spellDecoField, spellcheckPlugin, type SpellStatus } from "../spellcheck/decorations";
+import { texPosTagsPlugin } from "../texPosTags";
 
 export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "fontSize", label: "Font size", min: 10, max: 28, step: 1, unit: "px" },
@@ -53,11 +54,12 @@ export const EDITOR_SETTINGS: SettingControl[] = [
     options: DICTIONARY_OPTIONS,
     visibleWhen: { key: "spellcheck", value: true },
   },
+  { kind: "toggle", key: "posTags", label: "Paragraph position tags" },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = {
   fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line",
   cursorLineWidth: 1.2, smoothCursor: true,
-  spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL,
+  spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL, posTags: true,
 };
 
 /** Autosave debounce: the disk follows the last keystroke after this pause. */
@@ -125,6 +127,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
       typeof settings.spellLang === "string" ? settings.spellLang : DEFAULT_DICTIONARY_LABEL,
     ),
   };
+  /** Live mirror of the position-tag setting for the view plugin (stable closure). */
+  const posTagsRef = useRef(true);
+  posTagsRef.current = !!settings.posTags;
   /** Dictionary load state for the pane-header note (loading / error only). */
   const [spellStatus, setSpellStatus] = useState<SpellStatus>("idle");
 
@@ -209,6 +214,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
               getLang: () => spellRef.current.lang,
               onStatus: setSpellStatus,
             }),
+            // .tex only: paragraph position tags (issue 30) — overlay markers.
+            ...(filePath.endsWith(".tex") ? [texPosTagsPlugin({ getEnabled: () => posTagsRef.current })] : []),
             vesperChrome,
             keymap.of([
               ...defaultKeymap,
@@ -271,12 +278,13 @@ export default function EditorPane({ ctx, filePath }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
 
-  // The spell-check plugin reads its settings through getters but only on a
-  // transaction — force one when they change so toggles apply live (issue 24).
+  // The spell-check and position-tag plugins read their settings through
+  // getters but only on a transaction — force one when they change so toggles
+  // apply live (issues 24, 30).
   useEffect(() => {
     const v = viewRef.current;
     if (v) v.dispatch({});
-  }, [settings.spellcheck, settings.spellLang]);
+  }, [settings.spellcheck, settings.spellLang, settings.posTags]);
 
   // Keep the citation index loaded for the open project — \citep{…} lists its
   // keys; per-file saves force a re-read (see the save callback above).
