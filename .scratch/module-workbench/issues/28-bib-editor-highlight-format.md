@@ -64,3 +64,11 @@ Opening a `.bib`/`.rbib` file in the editor gives it two things:
   one Format click canonicalized the file on disk to the expected text, second
   click a no-op.
 
+- Re-verified 2026-09-19 on the minkota office machine (checkout of main in
+  sync with origin, clean tree): tsc --noEmit + vite build clean; Node harnesses
+  verify/bib-format.mjs 13/13 and verify/bib-mode.mjs 6/6; CDP UI suite (headless
+  Chromium :9333, test-latex-project) — computed colors on refs.bib as specified
+  (entry type gold-bright rgb(195,168,147) weight 600, key gold-bright, field
+  name sand rgb(179,143,111), brace taupe rgb(188,177,160)), Format button
+  present on the .bib tab and absent on .tex, one click canonicalized the
+  padded refs.bib on disk (second click a no-op).
