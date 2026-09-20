@@ -1,6 +1,6 @@
 # 31 — Line numbers (toggleable) + active-line highlight box
 
-Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core))
+Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core)); refined 2026-09-20 per user feedback (be97e80 web(core))
 
 ## Idea (user)
 
@@ -22,11 +22,12 @@ smoother.
   considered and dropped for simplicity), default **on** — the feature exists to
   be seen. Persisted with the other editor settings under `workbench.settings.v1`.
 - **Vesper styling** (`styles.css`) — no new colors: the active line's number
-  sits in a sand-tinted box (`rgba(sand, .3)`, 2px radius) with gold-bright text,
-  the same anchor as the pre-existing faint full-line tint (`.cm-activeLine`,
-  `rgba(sand, .06)`); the gutter itself already follows the theme spec (brown on
-  base). Sand = "attention without urgency" per app_theme.md — reds stay reserved
-  for action.
+  sits in a cell one surface step lighter than the gutter base (`--bg-active`)
+  with pearl text (the app's active-row idiom), and a strong hairline on its
+  right edge separates it from the editor space. Refined per user feedback: the
+  first cut was a sand tint + gold-bright number, which read as "light" — the box
+  must stay dark and quiet. The faint full-line tint (`.cm-activeLine`,
+  `rgba(sand, .06)`) is unchanged.
 
 ## Verification plan
 
@@ -36,9 +37,11 @@ Chrome CDP against the live app:
 - Gutter visible by default; numbering runs 1..13 over a 13-line fixture (the
   extra DOM element is CM6's hidden width-reserving spacer, inline
   `visibility: hidden` — filtered out of the assertions).
-- With the cursor on line 9 its number carries `.cm-activeLineGutter` with the
-  sand box + gold-bright text and the content line carries `.cm-activeLine`;
-  two ArrowDown presses move the box to lines 10 and 11.
+- With the cursor on line 9 its number carries `.cm-activeLineGutter` as a
+  `--bg-active` cell with pearl text and a strong hairline right edge, and the
+  content line carries `.cm-activeLine`; two ArrowDown presses move the box to
+  lines 10 and 11. Re-verified after the box refinement (screenshot:
+  `test-latex-project/linenum_box.png`).
 - Gear-menu "Line numbers" toggle defaults On; toggling off removes the gutter
   live (view rebuild) and stores `lineNumbers=false`; a full page reload with
   the project re-opened keeps the gutter hidden; toggling back on restores the
@@ -52,3 +55,9 @@ number, no brick (red is for action only); the full-line active highlight was en
 too, since its CSS rule already existed in the theme and the rationale is "seeing the
 active line". Toggling recreates the view like word wrap does — cursor position resets
 on toggle, consistent with existing behavior.
+
+Refined 2026-09-20 (user feedback: "It should not be light. Slightly lighter than
+background and should have line split from editor space"): the sand-tinted box +
+gold-bright number became a `--bg-active` cell — one surface step up from the
+gutter base, pearl text, 1px `--hairline-strong` right edge, no radius. Harness
+assertions updated to the new computed values; still 15/15. Code: be97e80 web(core).
