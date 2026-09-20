@@ -345,13 +345,13 @@ input::placeholder { color: var(--text-3); }
   font-size: 10.5px;
 }
 .cm-activeLine { background: rgba(179, 143, 111, 0.06); }
-/* Line numbers (issue 31): the active line number sits in a sand-tinted box -
-   attention without urgency, same anchor as the full-line tint above; the
-   gutter itself follows the theme spec (brown on base, see .cm-gutters). */
+/* Line numbers (issue 31): the active line number sits in a cell one surface
+   step lighter than the gutter base with pearl text (the active-row idiom), and
+   a strong hairline on its right edge separates it from the editor space. */
 .cm-gutters .cm-activeLineGutter {
-  background: rgba(179, 143, 111, 0.3);
-  color: var(--gold-bright);
-  border-radius: var(--radius-sm);
+  background: var(--bg-active);
+  color: var(--pearl);
+  border-right: 1px solid var(--hairline-strong);
 }
 /* Cursor: brick from the palette. Shape and motion are editor settings —
    EditorPane sets data-cursor / data-smooth on .editor-pane, applied live. */
