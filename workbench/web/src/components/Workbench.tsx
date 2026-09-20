@@ -422,9 +422,10 @@ function GroupView({ id }: { id: string }) {
       onDragLeave={onDragLeave}
       onClick={() => {
         // Clicking a pane activates it — that is what makes the Explorer's
-        // single-click open work. The Explorer selects files; it must not steal
-        // activation from the pane the user is reading in.
-        if (activeTab?.moduleId === "explorer") return;
+        // single-click open work. The Explorer selects files and the Structure
+        // outline jumps the cursor or scrolls the PDF; neither may steal
+        // activation from the pane the user is reading in (issue 38).
+        if (activeTab?.moduleId === "explorer" || activeTab?.moduleId === "structure") return;
         dispatch({ type: "focus", groupId: id });
       }}
     >
