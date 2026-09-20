@@ -116,6 +116,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
   gotoRef.current = ctx.editorGoto;
   const savedRef = useRef<(path: string) => void>(() => {});
   savedRef.current = ctx.onFileSaved;
+  const registerContentRef = useRef(ctx.registerEditorContent);
+  registerContentRef.current = ctx.registerEditorContent;
   const [viewTick, setViewTick] = useState(0);
   const [dirty, setDirty] = useState(false);
   // Ref mirror of `dirty` for the save-before-compile registration (stable closure).
@@ -156,6 +158,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
     let view: EditorView | null = null;
     // Autosave debounce timer (effect-level so the cleanup can cancel it).
     let autoTimer: number | null = null;
+    // Live-content subscribers (Structure outline, issue 38) + its unregister.
+    const contentSubs = new Set<() => void>();
+    let unregisterContent: (() => void) | undefined;
     (async () => {
       const r = await api.readFile(filePath);
       if (cancelled || !hostRef.current) return;
@@ -257,6 +262,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
               if (u.docChanged) {
                 setDirty(true);
                 dirtyRef.current = true;
+                for (const cb of contentSubs) cb(); // Structure outline re-parse
                 scheduleAutoSave(); // autosave: disk follows the last keystroke
               }
             }),
@@ -266,6 +272,20 @@ export default function EditorPane({ ctx, filePath }: Props) {
       viewRef.current = view;
       setError(null);
       setViewTick((t) => t + 1);
+      // Register live content so other modules (Structure outline) can parse
+      // this document as it is edited (issue 38).
+      const v = view; // stable non-null handle for the content getter
+      unregisterContent = registerContentRef.current(filePath, {
+        get text() {
+          return v.state.doc.toString();
+        },
+        subscribe: (cb) => {
+          contentSubs.add(cb);
+          return () => {
+            contentSubs.delete(cb);
+          };
+        },
+      });
       // A reverse-sync jump may have arrived while this file was loading.
       const g = gotoRef.current;
       if (g && g.file === filePath) applyGoto(view, g.line);
@@ -277,6 +297,7 @@ export default function EditorPane({ ctx, filePath }: Props) {
       if (autoTimer != null) window.clearTimeout(autoTimer);
       // Closing or switching away must not silently discard unsaved edits —
       // flush them (chained after any in-flight write) before the view goes.
+      unregisterContent?.(); // drop the live-content registration first
       const flush = dirtyRef.current ? saveRef.current() : null;
       view?.destroy();
       if (viewRef.current === view) viewRef.current = null;
