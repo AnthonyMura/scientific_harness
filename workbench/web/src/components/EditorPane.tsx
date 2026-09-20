@@ -83,7 +83,10 @@ function langForPath(p: string): Extension[] {
  *  without it only the browser's native caret is visible and these rules
  *  have nothing to style. Selection gets palette colors too, and the
  *  native caret is hidden entirely (drawSelection's ":focus -> initial"
- *  rule would otherwise let a second, text-colored caret show through). */
+ *  rule would otherwise let a second, text-colored caret show through).
+ *  The dark flag makes the editor carry CodeMirror's dark class — without
+ *  it the base theme's light rules (white gutter, blue active-line tint)
+ *  win over our lower-specificity overrides in styles.css. */
 const vesperChrome = EditorView.theme({
   "& .cm-cursor, & .cm-dropCursor": { borderLeftColor: "var(--brick)" },
   "& .cm-selectionBackground": { background: "rgba(179, 143, 111, 0.25)" },
@@ -92,6 +95,8 @@ const vesperChrome = EditorView.theme({
   },
   "& .cm-content": { caretColor: "transparent !important" },
   "& .cm-content:focus": { caretColor: "transparent !important" },
+}, {
+  dark: true,
 });
 
 interface Props {
