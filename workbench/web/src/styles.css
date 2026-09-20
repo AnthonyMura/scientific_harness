@@ -349,11 +349,13 @@ input::placeholder { color: var(--text-3); }
   font-size: 10.5px;
 }
 .editor-host .cm-editor .cm-activeLine { background: rgba(179, 143, 111, 0.06); }
-/* Line numbers (issue 31): the active line number sits in a cell one surface
-   step lighter than the gutter base with pearl text (the active-row idiom), and
-   a strong hairline on its right edge separates it from the editor space. */
+/* Line numbers (issue 31): the active line number sits in a warm amber-brown
+   cell — the --bg-active step-up pushed toward --sand's hue at the same
+   lightness (round-3 feedback: different hue, not lighter) — with pearl text
+   (the active-row idiom), and a strong hairline on its right edge separates it
+   from the editor space. */
 .editor-host .cm-editor .cm-gutters .cm-activeLineGutter {
-  background: var(--bg-active);
+  background: #402d1b;
   color: var(--pearl);
   border-right: 1px solid var(--hairline-strong);
 }
