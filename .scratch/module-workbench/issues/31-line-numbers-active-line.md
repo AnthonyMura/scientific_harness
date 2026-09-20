@@ -1,6 +1,6 @@
 # 31 — Line numbers (toggleable) + active-line highlight box
 
-Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core)); refined 2026-09-20 per user feedback (be97e80 web(core)); refined 2026-09-20 — gutter rendered on CodeMirror's light surface, now dark (41aec78 module(editor) + d563d61 web(core))
+Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core)); refined 2026-09-20 per user feedback (be97e80 web(core)); refined 2026-09-20 — gutter rendered on CodeMirror's light surface, now dark (41aec78 module(editor) + d563d61 web(core)); refined 2026-09-20 — active-line cell warmed toward sand (b60e140 web(core))
 
 ## Idea (user)
 
@@ -80,3 +80,12 @@ editor currently renders in generic monospace at 1.4 instead of --font-editor
 loses to the base rule. Same root cause; not fixed yet — awaiting a decision on
 whether the editor should be serif per the design or monospace (in which case the
 design tokens and the line-height control need rethinking).
+
+Refined 2026-09-20 (user feedback: "Active line colour should be a little bit
+different"; clarified: target = the number box, direction = different hue rather
+than strength): the cell moved from the neutral --bg-active step-up to a warm
+amber-brown #402d1b — same lightness as before, hue pushed toward --sand so it
+reads as a warm marker against the quiet gutter. Pearl text and the hairline-
+strong right edge are unchanged; the full-line sand tint is unchanged (the user
+pointed at the box only). Harness L2b updated to the new computed value; 16/16.
+Code: b60e140 web(core).
