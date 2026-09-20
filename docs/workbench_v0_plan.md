@@ -1,6 +1,6 @@
 # Workbench v0 — Application Plan
 
-> **Status:** building — v0 core implemented in `workbench/` (M0–M2 done, M3 in progress; see section 9). Companion to technical_description_v3.md. This is the first buildable slice of the workbench: file explorer, editor, LaTeX compiler with switchable compile targets (plus an app-local TinyTeX), PDF viewer. No LLM, no Zotero, no block IDs in this slice (block IDs are the next increment).
+> **Status:** released — **v0.1.0** shipped to the lab 2026-07 (tag `v0.1.0`); M0–M4 implemented, remaining work is polish (see section 9). Install & run: docs/INSTALL.md. Companion to technical_description_v3.md. This is the first buildable slice of the workbench: file explorer, editor, LaTeX compiler with switchable compile targets (plus an app-local TinyTeX), PDF viewer. No LLM, no Zotero, no block IDs in this slice (block IDs are the next increment).
 
 ## 1. Purpose and definition of done
 
