@@ -323,6 +323,57 @@ export default function PdfViewer({ ctx }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx.pdfSync, synctexTick]);
 
+  // Structure outline click (issue 38): scroll to the destination page — and,
+  // when the bookmark carries an XYZ top, near the section's line. No SyncTeX
+  // involved: the PDF's own outline is the source of truth in this direction.
+  useEffect(() => {
+    const req = ctx.pdfGoto;
+    if (!req) return;
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let flashTimer: number | undefined;
+    let flash: HTMLDivElement | null = null;
+    const apply = (attempt: number) => {
+      if (cancelled) return;
+      const host = hostRef.current;
+      if (!host) return;
+      const pageDiv = host.children[req.page - 1] as HTMLElement | undefined;
+      // The render loop may still be filling the host after a fresh compile.
+      if (!pageDiv) {
+        if (attempt < 20) retryTimer = window.setTimeout(() => apply(attempt + 1), 250);
+        return;
+      }
+      const scale = parseFloat(pageDiv.style.getPropertyValue("--scale-factor")) || zoom / 100;
+      // XYZ tops are PDF points from the page bottom; the canvas origin is top.
+      const yPx = req.topPt != null ? Math.max(0, pageDiv.clientHeight - req.topPt * scale) : 0;
+      const hostRect = host.getBoundingClientRect();
+      const pageRect = pageDiv.getBoundingClientRect();
+      host.scrollTo({
+        top: Math.max(0, host.scrollTop + (pageRect.top - hostRect.top) + yPx - 24),
+        behavior: "smooth",
+      });
+      flash = document.createElement("div");
+      flash.className = "pdf-sync-flash";
+      flash.style.left = "0px";
+      flash.style.top = `${Math.max(0, yPx - 5 * scale)}px`;
+      flash.style.width = `${pageDiv.clientWidth}px`;
+      flash.style.height = `${10 * scale}px`;
+      pageDiv.appendChild(flash);
+      flashTimer = window.setTimeout(() => {
+        flash?.remove();
+        flash = null;
+      }, 1700);
+    };
+    apply(0);
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (flashTimer !== undefined) window.clearTimeout(flashTimer);
+      flash?.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.pdfGoto]);
+
   // Inverse search (M3) + citation jump (issue 26): a click on a page either
   // jumps to the reference entry of a clicked citation or opens the source
   // file at that line. Drags (text selection) are ignored via pointer-down
