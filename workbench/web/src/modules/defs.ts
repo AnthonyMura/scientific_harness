@@ -12,6 +12,7 @@ export interface ModuleDef {
 
 export const MODULE_DEFS: Record<string, ModuleDef> = {
   explorer: { id: "explorer", title: "Explorer", slot: "sidebar", tabId: () => "explorer" },
+  structure: { id: "structure", title: "Structure", slot: "sidebar", tabId: () => "structure" },
   editor: {
     id: "editor",
     title: "Editor",
@@ -24,4 +25,4 @@ export const MODULE_DEFS: Record<string, ModuleDef> = {
 };
 
 /** Activity bar order. */
-export const MODULE_ORDER = ["explorer", "editor", "pdf", "log", "install"];
+export const MODULE_ORDER = ["explorer", "structure", "editor", "pdf", "log", "install"];
