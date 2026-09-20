@@ -3,7 +3,7 @@
 // shape (line/block/underline) and smooth motion are data attributes — live too.
 import React, { useEffect, useRef, useState } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
-import { EditorView, drawSelection, keymap } from "@codemirror/view";
+import { EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { acceptCompletion, autocompletion, completionKeymap } from "@codemirror/autocomplete";
@@ -34,6 +34,7 @@ export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "lineHeight", label: "Line height", min: 1.3, max: 2.4, step: 0.1 },
   { kind: "number", key: "tabSize", label: "Tab size", min: 2, max: 8, step: 2, unit: "sp" },
   { kind: "toggle", key: "wrap", label: "Word wrap" },
+  { kind: "toggle", key: "lineNumbers", label: "Line numbers" },
   { kind: "select", key: "cursorType", label: "Cursor type", options: ["line", "block", "underline"] },
   {
     kind: "number",
@@ -57,7 +58,7 @@ export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "toggle", key: "posTags", label: "Paragraph position tags" },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = {
-  fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, cursorType: "line",
+  fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, lineNumbers: true, cursorType: "line",
   cursorLineWidth: 1.2, smoothCursor: true,
   spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL, posTags: true,
 };
@@ -195,6 +196,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
       };
       const tabSize = typeof settings.tabSize === "number" ? settings.tabSize : 4;
       const wrap = !!settings.wrap;
+      // issue 31: line numbers + active-line box (toggling recreates the view, like wrap)
+      const lineNumbersOn = !!settings.lineNumbers;
       view = new EditorView({
         parent: hostRef.current,
         state: EditorState.create({
@@ -208,6 +211,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
             bracketMatching(),
             syntaxHighlighting(vesperHighlight),
             drawSelection(),
+            // Line numbers + active-line box (issue 31): the toggle recreates the
+            // view like wrap/tabSize; destroy-time flush keeps unsaved edits safe.
+            ...(lineNumbersOn ? [lineNumbers(), highlightActiveLine(), highlightActiveLineGutter()] : []),
             spellDecoField,
             spellcheckPlugin({
               getEnabled: () => spellRef.current.enabled,
@@ -273,10 +279,10 @@ export default function EditorPane({ ctx, filePath }: Props) {
       dirtyRef.current = false;
       void flush;
     };
-    // tabSize/wrap recreate the view; fontSize/lineHeight are live CSS vars.
+    // tabSize/wrap/lineNumbers recreate the view; fontSize/lineHeight are live CSS vars.
     // projectRoot: switching projects must reload even for identical file names.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap]);
+  }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap, settings.lineNumbers]);
 
   // The spell-check and position-tag plugins read their settings through
   // getters but only on a transaction — force one when they change so toggles
