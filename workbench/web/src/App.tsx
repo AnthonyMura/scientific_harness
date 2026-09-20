@@ -5,7 +5,7 @@ import { api, initApi } from "./api";
 import type { ActiveJob, Project, SshConfig, TargetStatus } from "./types";
 import ProjectBar from "./components/ProjectBar";
 import Workbench from "./components/Workbench";
-import type { AppCtx, EditorSaveHandle, SyncRequest } from "./modules/ctx";
+import type { AppCtx, EditorContentHandle, EditorSaveHandle, PdfPageRequest, SyncRequest } from "./modules/ctx";
 import { findParent, groupOfTab, layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
 
 function errMsg(e: unknown): string {
@@ -48,6 +48,12 @@ export default function App() {
   // before building (a compile reads from disk) and the unload guard can flush
   // them synchronously on page teardown.
   const editorSavesRef = useRef<Map<string, EditorSaveHandle>>(new Map());
+  // Open editor tabs register their live content here so other modules (the
+  // Structure outline) can parse the document as it is edited. State rather
+  // than a ref: registration must re-render the subscribers' ctx.
+  const [editorContents, setEditorContents] = useState<Map<string, EditorContentHandle>>(new Map());
+  /** Scroll-the-PDF request from the Structure outline (issue 38). */
+  const [pdfGoto, setPdfGoto] = useState<PdfPageRequest | null>(null);
 
   const [layout, dispatch] = useReducer(layoutReducer, undefined, () => loadPersistedLayout().state);
   const layoutRef = useRef(layout);
@@ -335,6 +341,43 @@ export default function App() {
     };
   }, []);
 
+  /** Editor tabs register their live content here (Structure outline). */
+  const registerEditorContent = useCallback((filePath: string, content: EditorContentHandle) => {
+    setEditorContents((m) => {
+      const next = new Map(m);
+      next.set(filePath, content);
+      return next;
+    });
+    return () => {
+      setEditorContents((m) => {
+        if (m.get(filePath) !== content) return m;
+        const next = new Map(m);
+        next.delete(filePath);
+        return next;
+      });
+    };
+  }, []);
+
+  /** Live text of an open editor tab (null while loading or closed). */
+  const editorContent = useCallback((filePath: string): string | null => {
+    const h = editorContents.get(filePath);
+    return h ? h.text : null;
+  }, [editorContents]);
+
+  /** Subscribe to document changes of an open editor tab. */
+  const subscribeEditorContent = useCallback(
+    (filePath: string, cb: () => void): (() => void) => {
+      const h = editorContents.get(filePath);
+      return h ? h.subscribe(cb) : () => {};
+    },
+    [editorContents],
+  );
+
+  /** Scroll the PDF pane to a page (Structure outline click, issue 38). */
+  const gotoPdfPage = useCallback((page: number, topPt: number | null = null) => {
+    setPdfGoto({ page, topPt, nonce: Date.now() });
+  }, []);
+
   // Page teardown: flush unsaved editor edits with keepalive requests — the
   // only writes that survive unload (Chrome aborts sync XHR mid-teardown). Both
   // events are needed because which one fires varies by browser and navigation
@@ -470,6 +513,15 @@ export default function App() {
     return layout.tabs[g.active]?.moduleId === "editor";
   }, [layout]);
 
+  /** The focused pane's active tab is a PDF tab (the Structure outline follows it). */
+  const pdfFocused = useMemo(() => {
+    const fg = layout.focusedGroup;
+    if (!fg) return false;
+    const g = layout.nodes[fg];
+    if (!g || g.kind !== "group" || !g.active) return false;
+    return layout.tabs[g.active]?.moduleId === "pdf";
+  }, [layout]);
+
   /** Whether any editor tab exists — drives the Explorer's single-click open. */
   const anyEditorOpen = useMemo(() => Object.values(layout.tabs).some((t) => t.moduleId === "editor"), [layout]);
 
@@ -552,6 +604,7 @@ export default function App() {
       projectRoot: project?.root ?? null,
       activeFile,
       editorFocused,
+      pdfFocused,
       anyEditorOpen,
       project,
       pdfFile,
@@ -585,11 +638,17 @@ export default function App() {
       syncToEditor,
       onFileSaved,
       registerEditorSave,
+      registerEditorContent,
+      editorContent,
+      subscribeEditorContent,
+      pdfGoto,
+      gotoPdfPage,
     }),
-    [project, activeFile, editorFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
+    [project, activeFile, editorFocused, pdfFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
      setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
-     pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave],
+     pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave, registerEditorContent,
+     editorContents, editorContent, subscribeEditorContent, pdfGoto, gotoPdfPage],
   );
 
   return (
