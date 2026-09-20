@@ -22,6 +22,25 @@ export interface SyncRequest {
   nonce: number;
 }
 
+/** One-way request: scroll the PDF pane to a page (Structure outline click). */
+export interface PdfPageRequest {
+  /** 1-based page number of the destination. */
+  page: number;
+  /** Destination top in PDF points from the page bottom (null = top of page). */
+  topPt: number | null;
+  /** Bumped on every request so identical targets re-trigger. */
+  nonce: number;
+}
+
+/** Live content of one open editor tab, registered by the Editor pane so other
+ *  modules (Structure) can parse the document as it is edited. */
+export interface EditorContentHandle {
+  /** Current document text, read live from the editor state. */
+  readonly text: string;
+  /** Subscribe to document changes; returns an unsubscribe function. */
+  subscribe: (cb: () => void) => () => void;
+}
+
 export interface AppCtx {
   projectOpen: boolean;
   /** Absolute root of the open project (null when none) — per-project reload key. */
@@ -30,6 +49,8 @@ export interface AppCtx {
   activeFile: string | null;
   /** True when the focused pane's active tab is an editor tab — a single click in the Explorer opens files. */
   editorFocused: boolean;
+  /** True when the focused pane's active tab is a PDF tab — Structure follows the displayed PDF. */
+  pdfFocused: boolean;
   /** True when any editor tab is open — with none open, a single click in the Explorer also opens files. */
   anyEditorOpen: boolean;
   /** The open project (null when none) — pane headers need its config. */
@@ -79,6 +100,16 @@ export interface AppCtx {
    *  before building (a compile reads from disk) and the unload guard can flush
    *  them. Returns an unregister fn. */
   registerEditorSave: (filePath: string, save: EditorSaveHandle) => () => void;
+  /** Editor tabs register their live content here (Structure outline). Returns an unregister fn. */
+  registerEditorContent: (filePath: string, content: EditorContentHandle) => () => void;
+  /** Live content of an open editor tab (null while the tab is loading or closed). */
+  editorContent: (filePath: string) => string | null;
+  /** Subscribe to document changes of an open editor tab (no-op unsubscribe when not open). */
+  subscribeEditorContent: (filePath: string, cb: () => void) => () => void;
+  /** Scroll-the-PDF request from the Structure outline (issue 38). */
+  pdfGoto: PdfPageRequest | null;
+  /** Scroll the PDF pane to a page (Structure outline click in PDF mode). */
+  gotoPdfPage: (page: number, topPt?: number | null) => void;
   /** All .tex files in the project (compile picker + main-file setting); null while loading. */
   texFiles: string[] | null;
   /** Re-fetch the .tex list (after create/rename/delete in the Explorer). */

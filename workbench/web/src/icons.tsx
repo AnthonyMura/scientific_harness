@@ -155,6 +155,14 @@ export const DownloadIcon = (p: IconProps) => (
     <path d="M12 15V3" />
   </Svg>
 );
+export const OutlineIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 5h16" />
+    <path d="M7 10h13" />
+    <path d="M7 15h13" />
+    <path d="M10 20h10" />
+  </Svg>
+);
 
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
 
