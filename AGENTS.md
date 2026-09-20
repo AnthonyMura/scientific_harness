@@ -30,7 +30,7 @@ The app lives in `workbench/` (browser-first dev mode; the Electron shell comes 
 Folder layout:
 - AGENTS.md — this file
 - README.md — project index
-- docs/ — conception documents (v1 original → v2 → v3) and the active plan workbench_v0_plan.md
+- docs/ — conception documents (v1 original → v2 → v3), the active plan workbench_v0_plan.md, and INSTALL.md (install & run guide for lab machines)
 - docs/reviews/ — external reviews of the conception
 - external/ — reference material that is not part of the project
 - workbench/ — the v0 app: `web/` (React + Vite UI), `backend/` (FastAPI sidecar, venv in `.venv`), `.texlive/` (in-app TinyTeX, gitignored)
@@ -52,6 +52,7 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 ## Version control
 
 - **Remote**: `origin` -> https://github.com/AnthonyMura/scientific_harness (public; clone and dev-mode setup documented in README)
+- **Releases**: a release is an annotated tag `vX.Y.Z` on a `chore(release): vX.Y.Z — ...` commit, pushed to origin. First release: v0.1.0 (2026-07); install & run guide in docs/INSTALL.md.
 - Commit messages are scoped by module so history shows where each change landed:
   - `module(<name>): <summary>` — app modules: backend, app-shell, layout, workbench-shell, explorer, editor, pdf-viewer, log-panel, install
   - `web(core): <summary>` — shared web plumbing (api client, types, Vesper theme, icons, base styles)
