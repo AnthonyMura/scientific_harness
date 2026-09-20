@@ -336,19 +336,23 @@ input::placeholder { color: var(--text-3); }
   background: transparent;
 }
 .cm-scroller { overflow: auto; }
-.cm-content { caret-color: var(--pearl); padding-bottom: 40vh; }
-.cm-gutters {
+/* CodeMirror's built-in theme always applies — the editor carries its light
+   class unless EditorView.darkTheme is set (see EditorPane) — and its rules are
+   one specificity level above bare .cm-* selectors, so every Vesper color rule
+   below is scoped under .editor-host .cm-editor to beat it. */
+.editor-host .cm-editor .cm-content { caret-color: var(--pearl); padding-bottom: 40vh; }
+.editor-host .cm-editor .cm-gutters {
   background: var(--bg-base);
   color: var(--text-3);
   border-right: 1px solid var(--hairline);
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
-.cm-activeLine { background: rgba(179, 143, 111, 0.06); }
+.editor-host .cm-editor .cm-activeLine { background: rgba(179, 143, 111, 0.06); }
 /* Line numbers (issue 31): the active line number sits in a cell one surface
    step lighter than the gutter base with pearl text (the active-row idiom), and
    a strong hairline on its right edge separates it from the editor space. */
-.cm-gutters .cm-activeLineGutter {
+.editor-host .cm-editor .cm-gutters .cm-activeLineGutter {
   background: var(--bg-active);
   color: var(--pearl);
   border-right: 1px solid var(--hairline-strong);
