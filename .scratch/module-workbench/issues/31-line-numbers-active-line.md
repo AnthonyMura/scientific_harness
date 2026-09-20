@@ -1,6 +1,6 @@
 # 31 — Line numbers (toggleable) + active-line highlight box
 
-Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core)); refined 2026-09-20 per user feedback (be97e80 web(core))
+Status: resolved (2026-09-20, main; code commits d919f33 module(editor) + 38f4040 web(core)); refined 2026-09-20 per user feedback (be97e80 web(core)); refined 2026-09-20 — gutter rendered on CodeMirror's light surface, now dark (41aec78 module(editor) + d563d61 web(core))
 
 ## Idea (user)
 
@@ -31,12 +31,13 @@ smoother.
 
 ## Verification plan
 
-Done (2026-09-20) — harness `test-latex-project/linenum_test.mjs`, 15/15, headless
+Done (2026-09-20) — harness `test-latex-project/linenum_test.mjs`, 16/16, headless
 Chrome CDP against the live app:
 
-- Gutter visible by default; numbering runs 1..13 over a 13-line fixture (the
-  extra DOM element is CM6's hidden width-reserving spacer, inline
-  `visibility: hidden` — filtered out of the assertions).
+- Gutter visible by default on the Vesper base surface (`--bg-base`,
+  `--hairline` right edge — not CodeMirror's light gutter); numbering runs 1..13
+  over a 13-line fixture (the extra DOM element is CM6's hidden width-reserving
+  spacer, inline `visibility: hidden` — filtered out of the assertions).
 - With the cursor on line 9 its number carries `.cm-activeLineGutter` as a
   `--bg-active` cell with pearl text and a strong hairline right edge, and the
   content line carries `.cm-activeLine`; two ArrowDown presses move the box to
@@ -61,3 +62,21 @@ background and should have line split from editor space"): the sand-tinted box +
 gold-bright number became a `--bg-active` cell — one surface step up from the
 gutter base, pearl text, 1px `--hairline-strong` right edge, no radius. Harness
 assertions updated to the new computed values; still 15/15. Code: be97e80 web(core).
+
+Refined 2026-09-20 (user feedback: "I do not like that the vertical line for
+numbers of lines is white"): the whole gutter column rendered on CodeMirror's
+built-in light surface (#f5f5f5 with a #ddd border) — the base theme applies its
+&light rules one specificity level above our bare .cm-* selectors, and the editor
+carried the light class because EditorView.darkTheme was never set. Fix: vesperChrome
+now passes {dark: true} to EditorView.theme (the editor carries the dark class), and
+every Vesper color rule in styles.css is scoped under .editor-host .cm-editor so it
+wins the cascade. Harness gained a gutter-surface assertion (L1c) and an exact
+active-line tint check (L2d): 16/16. Code: 41aec78 module(editor), d563d61 web(core).
+
+Known deviation left open for user decision: the base theme's .cm-scroller rule
+(font-family monospace, line-height 1.4) also beats Vesper's design values, so the
+editor currently renders in generic monospace at 1.4 instead of --font-editor
+(Palatino serif, 1.7); the user's line-height setting (--cm-lh) is set inline but
+loses to the base rule. Same root cause; not fixed yet — awaiting a decision on
+whether the editor should be serif per the design or monospace (in which case the
+design tokens and the line-height control need rethinking).
