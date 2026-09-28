@@ -13,6 +13,8 @@ export interface SettingControl {
   options?: readonly string[];
   /** When set, the row is shown only while another setting has this value — a sub-setting. */
   visibleWhen?: { key: string; value: SettingValue };
+  /** Optional one-line note rendered under the label (e.g. what a toggle affects). */
+  hint?: string;
 }
 
 export type SettingValue = number | boolean | string;

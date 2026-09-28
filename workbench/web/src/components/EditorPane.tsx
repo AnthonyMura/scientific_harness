@@ -29,6 +29,7 @@ import {
 } from "../spellcheck/dictionaries";
 import { spellDecoField, spellcheckPlugin, type SpellStatus } from "../spellcheck/decorations";
 import { texPosTagsPlugin } from "../texPosTags";
+import { texHideCommentsPlugin } from "../texHideComments";
 
 export const EDITOR_SETTINGS: SettingControl[] = [
   { kind: "number", key: "fontSize", label: "Font size", min: 10, max: 28, step: 1, unit: "px" },
@@ -57,11 +58,17 @@ export const EDITOR_SETTINGS: SettingControl[] = [
     visibleWhen: { key: "spellcheck", value: true },
   },
   { kind: "toggle", key: "posTags", label: "Paragraph position tags" },
+  {
+    kind: "toggle",
+    key: "hideComments",
+    label: "Hide comments",
+    hint: "Full-line % comments are hidden from view and excluded from search — turn this off to find them again.",
+  },
 ];
 export const EDITOR_DEFAULTS: ModuleSettings = {
   fontSize: 15, lineHeight: 1.7, tabSize: 4, wrap: false, lineNumbers: true, cursorType: "line",
   cursorLineWidth: 1.2, smoothCursor: true,
-  spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL, posTags: true,
+  spellcheck: true, spellLang: DEFAULT_DICTIONARY_LABEL, posTags: true, hideComments: false,
 };
 
 /** Autosave debounce: the disk follows the last keystroke after this pause. */
@@ -146,6 +153,9 @@ export default function EditorPane({ ctx, filePath }: Props) {
   /** Live mirror of the position-tag setting for the view plugin (stable closure). */
   const posTagsRef = useRef(true);
   posTagsRef.current = !!settings.posTags;
+  /** Live mirror of the hide-comments setting for the view plugin (stable closure). */
+  const hideCommentsRef = useRef(false);
+  hideCommentsRef.current = !!settings.hideComments;
   /** Dictionary load state for the pane-header note (loading / error only). */
   const [spellStatus, setSpellStatus] = useState<SpellStatus>("idle");
 
@@ -240,6 +250,11 @@ export default function EditorPane({ ctx, filePath }: Props) {
             }),
             // .tex only: paragraph position tags (issue 30) — overlay markers.
             ...(filePath.endsWith(".tex") ? [texPosTagsPlugin({ getEnabled: () => posTagsRef.current })] : []),
+            // .tex only: hide full-line comments (issue 39) — display-only replace
+            // decorations plus the search filter that excludes hidden lines.
+            ...(filePath.endsWith(".tex")
+              ? [texHideCommentsPlugin({ getEnabled: () => hideCommentsRef.current })]
+              : []),
             vesperChrome,
             keymap.of([
               ...defaultKeymap,
@@ -318,13 +333,13 @@ export default function EditorPane({ ctx, filePath }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, ctx.projectRoot, settings.tabSize, settings.wrap, settings.lineNumbers]);
 
-  // The spell-check and position-tag plugins read their settings through
-  // getters but only on a transaction — force one when they change so toggles
-  // apply live (issues 24, 30).
+  // The spell-check, position-tag and hide-comments plugins read their settings
+  // through getters but only on a transaction — force one when they change so
+  // toggles apply live (issues 24, 30, 39).
   useEffect(() => {
     const v = viewRef.current;
     if (v) v.dispatch({});
-  }, [settings.spellcheck, settings.spellLang, settings.posTags]);
+  }, [settings.spellcheck, settings.spellLang, settings.posTags, settings.hideComments]);
 
   // Keep the citation index loaded for the open project — \citep{…} lists its
   // keys; per-file saves force a re-read (see the save callback above).
@@ -423,6 +438,14 @@ export default function EditorPane({ ctx, filePath }: Props) {
         {spellOn && spellStatus === "error" && (
           <span className="spell-status err" title="Dictionary download failed — check the connection and try again">
             dictionary failed
+          </span>
+        )}
+        {isTex && !!settings.hideComments && (
+          <span
+            className="spell-status"
+            title="Full-line comments are hidden from view and excluded from search. Turn off “Hide comments” in editor settings to restore them."
+          >
+            comments hidden
           </span>
         )}
         {filePath && (

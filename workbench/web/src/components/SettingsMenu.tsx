@@ -89,7 +89,10 @@ export default function SettingsMenu({ x, y, title, controls, values, onChange, 
       ) : (
         visible.map((c) => (
           <div key={c.key} className="set-row">
-            <span className="set-label">{c.label}</span>
+            <span className="set-labels">
+              <span className="set-label">{c.label}</span>
+              {c.hint && <span className="set-hint">{c.hint}</span>}
+            </span>
             {c.kind === "number" ? (
               <NumberControl c={c} value={typeof values[c.key] === "number" ? (values[c.key] as number) : 0} onChange={onChange} />
             ) : c.kind === "select" ? (
