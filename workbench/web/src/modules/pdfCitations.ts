@@ -88,10 +88,23 @@ const GROUP_RE = /\[[^\[\]]*\]/g;
 const PART_RE = /^\d{1,4}(\s*-\s*\d{1,4})?$/;
 // A bibliography entry start: "[N]" at the beginning of a line.
 const ENTRY_RE = /^\s*\[(\d{1,4})\]/;
+// A bare-number entry label ("72. Author…", MDPI/ACS print style): number +
+// dot at the line start with a space after the dot (rejects decimals and DOIs
+// wrapped to a line start). Ambiguous with prose, so scanBibliography accepts
+// one only when it continues the accepted number sequence.
+const BARE_ENTRY_RE = /^\s*(\d{1,4})\.\s/;
 // The References / Bibliography heading (standalone line).
 const HEADING_RE = /^\s*(references|bibliography)\b/i;
 // A range expands to at most this many members (guards [1-9999]).
 const MAX_RANGE_MEMBERS = 50;
+// Heading-less fallback (see findBibStart): a real reference's first line is an
+// author/title line, while the other bare "N." lines in such documents are
+// short section titles ("2. Materials and Methods") or prose — require at
+// least this much text on the candidate's first line.
+const MIN_FALLBACK_ENTRY_CHARS = 30;
+// …and the validated number sequence must reach this many entries: a prose
+// numbered list rarely runs that long, a real bibliography almost always does.
+const MIN_FALLBACK_ENTRIES = 8;
 
 function unionBox(boxes: Box[]): Box {
   let x0 = Infinity;
@@ -279,15 +292,77 @@ export function scanPage(
   return { groups, lines: lines.map(({ text, x0, yTop, x1 }) => ({ text, x0, yTop, x1 })) };
 }
 
+/** Where the bibliography's entry text starts: the (page, line) of the first
+ *  line to read as entry content. Heading case: the line AFTER the "References"
+ *  / "Bibliography" heading. Fallback case (no heading anywhere): a validated
+ *  bare "1." label — MDPI submission builds render the references section with
+ *  an empty \section (mdpi.cls leaves \@reftitle unset), so there is no
+ *  heading text to find, only the numbered entries themselves. */
+function findBibStart(pages: LineItem[][]): { page: number; line: number } | null {
+  for (let pi = 0; pi < pages.length; pi++) {
+    const li = pages[pi].findIndex((l) => HEADING_RE.test(l.text));
+    if (li >= 0) return { page: pi, line: li + 1 };
+  }
+  // Heading-less fallback. A candidate is a bare "1." label in the left half
+  // whose first line is long enough to be a reference (not a section title);
+  // it is accepted only if the number sequence continues to
+  // MIN_FALLBACK_ENTRIES entries. Among passing candidates the LAST one wins:
+  // prose numbered lists sit mid-document, a bibliography sits at the end.
+  const pageWidth = (lines: LineItem[]): number => {
+    let w = 0;
+    for (const l of lines) if (l.x1 > w) w = l.x1;
+    return w;
+  };
+  let best: { page: number; line: number } | null = null;
+  for (let pi = 0; pi < pages.length; pi++) {
+    const lines = pages[pi];
+    const width = pageWidth(lines);
+    for (let li = 0; li < lines.length; li++) {
+      const line = lines[li];
+      const m = BARE_ENTRY_RE.exec(line.text);
+      if (!m || m[1] !== "1") continue;
+      if (width > 0 && line.x0 >= width / 2) continue; // two-column guard
+      if (line.text.trim().length < MIN_FALLBACK_ENTRY_CHARS) continue;
+      let expect = 2;
+      let found = 1;
+      for (let p2 = pi; p2 < pages.length && found < MIN_FALLBACK_ENTRIES; p2++) {
+        const l2s = pages[p2];
+        const w2 = pageWidth(l2s);
+        for (let l2 = p2 === pi ? li + 1 : 0; l2 < l2s.length; l2++) {
+          const t = l2s[l2];
+          const mm = BARE_ENTRY_RE.exec(t.text);
+          if (mm && mm[1] === String(expect) && (w2 <= 0 || t.x0 < w2 / 2)) {
+            found++;
+            expect++;
+          }
+        }
+      }
+      if (found >= MIN_FALLBACK_ENTRIES) best = { page: pi, line: li };
+    }
+  }
+  return best;
+}
+
 /** Index the bibliography entries of a rendered document. The section starts
  *  at the first line beginning with "References" / "Bibliography"; after it,
- *  an entry starts at a line beginning with [N] in the left half of the page
- *  (two-column guard) and runs until the next entry start — entries may span
- *  pages. No heading → empty map (the feature stays inert). */
+ *  an entry starts at a line beginning with [N] or a bare "N." label in the
+ *  left half of the page (two-column guard) and runs until the next entry
+ *  start — entries may span pages. A document uses one label style: the first
+ *  detected entry locks it, so a "[2]" wrapped to a line start in an MDPI
+ *  ("N.") bibliography — or a bare "2." in a [N] one — is read as
+ *  continuation text. Bare labels are ambiguous with prose, so they must also
+ *  continue the accepted number sequence (1, 2, 3, …); bracketed labels are
+ *  unambiguous and need no such guard. When no heading exists at all, a
+ *  validated bare "1." label starts the section instead (findBibStart) — this
+ *  covers MDPI submission builds whose references section renders without a
+ *  visible heading. No start found → empty map (the feature stays inert). */
 export function scanBibliography(pages: LineItem[][]): Map<number, BibEntry> {
+  const start = findBibStart(pages);
+  if (!start) return new Map<number, BibEntry>();
   const out = new Map<number, BibEntry>();
-  let inBib = false;
   let entry: { num: number; page: number; li: number; lines: string[] } | null = null;
+  let lastNum = 0; // last accepted entry number (bare-label sequence guard)
+  let labelStyle: "bracket" | "bare" | null = null;
 
   const flush = () => {
     if (!entry) return;
@@ -313,15 +388,22 @@ export function scanBibliography(pages: LineItem[][]): Map<number, BibEntry> {
     for (const l of lines) if (l.x1 > width) width = l.x1;
     for (let li = 0; li < lines.length; li++) {
       const line = lines[li];
-      if (!inBib) {
-        if (HEADING_RE.test(line.text)) inBib = true;
-        continue;
-      }
+      if (pi < start.page || (pi === start.page && li < start.line)) continue;
       const m = ENTRY_RE.exec(line.text);
-      // Two-column guard: v0 accepts entry starts in the left half only.
-      if (m && width > 0 && line.x0 < width / 2) {
+      const bm = m ? null : BARE_ENTRY_RE.exec(line.text);
+      // Two-column guard: v0 accepts entry starts in the left half only. The
+      // first detected label locks the document's style; a bare label must
+      // additionally continue the number sequence (prose guard).
+      if (
+        width > 0 &&
+        line.x0 < width / 2 &&
+        ((m && labelStyle !== "bare") || (bm && labelStyle !== "bracket")) &&
+        (!bm || bm[1] === String(lastNum + 1))
+      ) {
         flush();
-        entry = { num: parseInt(m[1], 10), page: pi + 1, li, lines: [line.text] };
+        entry = { num: parseInt((m ?? bm)![1], 10), page: pi + 1, li, lines: [line.text] };
+        lastNum = entry.num;
+        labelStyle = m ? "bracket" : "bare";
       } else if (entry) {
         entry.lines.push(line.text);
       }
