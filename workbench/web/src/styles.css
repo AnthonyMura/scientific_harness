@@ -1,4 +1,4 @@
-﻿/* ============================================================
+/* ============================================================
    Scientific Harness — Vesper theme
    A single dusk theme: ink warmed toward oxblood, pearl text,
    brick primary, sand as the only gold. No light/dark switch.
@@ -1060,6 +1060,11 @@ code {
 .ic-folder { color: var(--sand); }
 .ic-tex { color: #C3A893; }
 .ic-md { color: var(--taupe); }
+.ic-bib { color: var(--sand); }
+.ic-json { color: #C3A893; }
+.ic-csv { color: var(--brown); }
+.ic-cfg { color: var(--taupe); }
+.ic-xml { color: var(--err); }
 .ic-pdf { color: var(--err); }
 .ic-img { color: var(--brown); }
 .ic-file { color: var(--text-3); }

@@ -163,6 +163,40 @@ export const OutlineIcon = (p: IconProps) => (
     <path d="M10 20h10" />
   </Svg>
 );
+export const DatabaseIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <ellipse cx="12" cy="5" rx="9" ry="3" />
+    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+  </Svg>
+);
+export const BracesIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1" />
+    <path d="M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1" />
+  </Svg>
+);
+export const TableIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <path d="M3 9h18" />
+    <path d="M9 21V9" />
+  </Svg>
+);
+export const SlidersIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M4 21v-7" /><path d="M4 10V3" />
+    <path d="M12 21v-9" /><path d="M12 8V3" />
+    <path d="M20 21v-5" /><path d="M20 12V3" />
+    <path d="M1 14h6" /><path d="M9 8h6" /><path d="M17 16h6" />
+  </Svg>
+);
+export const CodeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m16 18 6-6-6-6" />
+    <path d="m8 6-6 6 6 6" />
+  </Svg>
+);
 
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
 
@@ -180,6 +214,14 @@ export function entryIcon(name: string, isDir: boolean, expanded: boolean): Reac
   const n = name.toLowerCase();
   if (n.endsWith(".tex")) return <FileIcon className="ic-tex" />;
   if (n.endsWith(".md") || n.endsWith(".markdown")) return <FileTextIcon className="ic-md" />;
+  if (n.endsWith(".bib") || n.endsWith(".rbib")) return <DatabaseIcon className="ic-bib" />;
+  if (n.endsWith(".json")) return <BracesIcon className="ic-json" />;
+  if (n.endsWith(".csv") || n.endsWith(".tsv")) return <TableIcon className="ic-csv" />;
+  if (
+    n.endsWith(".yaml") || n.endsWith(".yml") || n.endsWith(".toml") ||
+    n.endsWith(".ini") || n.endsWith(".cfg") || n.endsWith(".conf")
+  ) return <SlidersIcon className="ic-cfg" />;
+  if (n.endsWith(".xml") || n.endsWith(".html") || n.endsWith(".htm")) return <CodeIcon className="ic-xml" />;
   if (n.endsWith(".pdf")) return <FileIcon className="ic-pdf" />;
   if (isImageName(n)) return <FileIcon className="ic-img" />;
   return <FileIcon className="ic-file" />;

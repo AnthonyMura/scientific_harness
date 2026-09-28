@@ -27,6 +27,9 @@ const FILE_TYPES: { label: string; ext: string }[] = [
   { label: "LaTeX document", ext: "tex" },
   { label: "Markdown note", ext: "md" },
   { label: "Plain text", ext: "txt" },
+  { label: "BibTeX bibliography", ext: "bib" },
+  { label: "JSON", ext: "json" },
+  { label: "CSV data table", ext: "csv" },
 ];
 
 function baseName(p: string): string {
