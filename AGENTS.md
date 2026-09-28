@@ -19,7 +19,7 @@ Project context: see docs/workbench_v0_plan.md (the active build plan) and docs/
 
 The app lives in `workbench/` (browser-first dev mode; the Electron shell comes later):
 
-- **Dev server**: Vite at `127.0.0.1:5199` (`workbench/web`, HMR on). inotify events are unreliable on this WSL/UNC share, so the config sets `server.watch.usePolling: true` — keep it; without polling a missed change event leaves Vite serving a stale transform indefinitely (`.scratch/module-workbench/issues/32-vite-stale-transform.md`). If app behavior looks older than the code on disk, diff `curl http://127.0.0.1:5199/src/<module>` against disk before debugging app logic.
+- **Dev server**: Vite at `127.0.0.1:5199` (`workbench/web`, HMR on). inotify events are unreliable on this WSL/UNC share, so the config sets `server.watch.usePolling: true` — keep it; without polling a missed change event leaves Vite serving a stale transform indefinitely (`.scratch/module-workbench/resolved/32-vite-stale-transform.md`). If app behavior looks older than the code on disk, diff `curl http://127.0.0.1:5199/src/<module>` against disk before debugging app logic.
 - **Sidecar**: FastAPI at `127.0.0.1:8765`, token `devtoken` in header `X-Workbench-Token`. Launch from WSL: `cd workbench/backend && WORKBENCH_TOKEN=devtoken ./.venv/bin/python -m workbench_backend serve --port 8765 --reload`. With `--reload`, backend `.py` changes are picked up automatically (the in-memory job registry resets on reload).
 - **Production build (WSL only)** — Windows-side builds fail. Inside WSL: `export PATH=$HOME/nodejs/bin:$PATH; cd workbench/web && node node_modules/typescript/bin/tsc --noEmit && node node_modules/vite/bin/vite.js build`.
 - **File writes**: the write tool's atomic rename fails on this share (ENOTSUP). Create/replace files via a pwsh single-quoted here-string → temp `.sh` → `wsl.exe -d Ubuntu -- bash <wslPath>` (compute `<wslPath>` in pwsh as `$p -replace '\\','/' -replace '^C:', '/mnt/c'` — see the backslash note above); use quoted heredoc delimiters (`<<'EOF_X'`) when the content contains `${...}`. Reads work directly on UNC.
@@ -34,7 +34,7 @@ Folder layout:
 - docs/reviews/ — external reviews of the conception
 - external/ — reference material that is not part of the project
 - workbench/ — the v0 app: `web/` (React + Vite UI), `backend/` (FastAPI sidecar, venv in `.venv`), `.texlive/` (in-app TinyTeX, gitignored)
-- .scratch/ — issue tracker and specs per feature
+- .scratch/ — issue tracker and specs per feature (open tickets in `issues/`, resolved ones in `resolved/`)
 ## Agent skills
 
 ### Issue tracker
