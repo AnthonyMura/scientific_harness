@@ -120,4 +120,9 @@ export interface AppCtx {
   treeTick: number;
   /** Ask the Explorer to reload its tree (after Save version / Save As in the PDF pane). */
   bumpTree: () => void;
+  /** True after a top-bar project change until the Explorer does a full reload —
+   *  the refresh button shows red so the user knows the tree may be stale (issue 41). */
+  explorerStale: boolean;
+  /** Clear the stale flag (the Explorer finished a full reload). */
+  clearExplorerStale: () => void;
 }

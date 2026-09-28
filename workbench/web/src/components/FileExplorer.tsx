@@ -120,14 +120,22 @@ export default function FileExplorer({ ctx }: Props) {
     }
   }
 
-  async function reloadAll() {
+  /** Re-list the root plus every expanded dir. Resolves true when the root
+   *  load succeeded - a full refresh, which settles the stale flag (issue 41). */
+  async function reloadAll(): Promise<boolean> {
     const dirs = ["", ...expandedRef.current];
     setByDir({});
+    let rootOk = false;
     await Promise.all(
       dirs.map((d) =>
-        api.tree(d, showHiddenRef.current).then((r) => setByDir((prev) => ({ ...prev, [d]: r.entries }))).catch(() => {}),
+        api.tree(d, showHiddenRef.current).then((r) => {
+          if (d === "") rootOk = true;
+          setByDir((prev) => ({ ...prev, [d]: r.entries }));
+        }).catch(() => {}),
       ),
     );
+    if (rootOk) ctx.clearExplorerStale();
+    return rootOk;
   }
 
   // Reset + reload when a project is (re)opened or switched to another root.
@@ -437,7 +445,12 @@ export default function FileExplorer({ ctx }: Props) {
           <button type="button" title="New Folder" onClick={() => startCreateIn(createTargetDir(), "dir")}>
             <FolderPlusIcon size={14} />
           </button>
-          <button type="button" title="Refresh tree" onClick={() => void reloadAll()}>
+          <button
+            type="button"
+            className={ctx.explorerStale ? "stale" : ""}
+            title={ctx.explorerStale ? "Tree may be out of date - click to refresh" : "Refresh tree"}
+            onClick={() => void reloadAll()}
+          >
             <RefreshIcon size={14} />
           </button>
           <button type="button" title="Collapse All folders" onClick={() => setExpanded(new Set())}>

@@ -33,6 +33,8 @@ export default function App() {
   const [artifactNames, setArtifactNames] = useState<{ pdf: string; synctex: string } | null>(null);
   /** Bumped when project files change externally - the Explorer reloads its tree. */
   const [treeTick, setTreeTick] = useState(0);
+  /** Set after a top-bar project change until the Explorer does a full reload (issue 41). */
+  const [explorerStale, setExplorerStale] = useState(false);
   // Compile-target selector (M3): probe results + a tick that re-probes
   // after every install job settles.
   const [targetStatuses, setTargetStatuses] = useState<TargetStatus[] | null>(null);
@@ -212,6 +214,7 @@ export default function App() {
     try {
       const p = await api.openProject(path);
       setProject(p);
+      setExplorerStale(true); // tree may be stale until a full reload (issue 41)
       dispatch({ type: "resetTabs" });
       openDefaultTabs();
       void refreshRecent();
@@ -245,6 +248,7 @@ export default function App() {
     try {
       const p = await api.newProject(name);
       setProject(p);
+      setExplorerStale(true); // tree may be stale until a full reload (issue 41)
       dispatch({ type: "resetTabs" });
       openDefaultTabs();
       setShowNew(false);
@@ -259,6 +263,7 @@ export default function App() {
     try {
       const opened = await api.openProject(p.root);
       setProject(opened);
+      setExplorerStale(true); // tree may be stale until a full reload (issue 41)
       dispatch({ type: "resetTabs" });
       openDefaultTabs();
     } catch (e) {
@@ -494,6 +499,9 @@ export default function App() {
 
   const bumpTree = useCallback(() => setTreeTick((t) => t + 1), []);
 
+  /** The Explorer finished a full reload - the stale flag (issue 41) is settled. */
+  const clearExplorerStale = useCallback(() => setExplorerStale(false), []);
+
   // --- module context -----------------------------------------------------
 
   const activeFile = useMemo(() => {
@@ -618,6 +626,8 @@ export default function App() {
       pdfArtifact,
       treeTick,
       bumpTree,
+      explorerStale,
+      clearExplorerStale,
       autoCompile: !!project?.auto_compile,
       onAutoCompile: (on) => void setAutoCompile(on),
       targetStatuses,
@@ -645,7 +655,7 @@ export default function App() {
       gotoPdfPage,
     }),
     [project, activeFile, editorFocused, pdfFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
-     setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree,
+     setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree, explorerStale, clearExplorerStale,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave, registerEditorContent,
      editorContents, editorContent, subscribeEditorContent, pdfGoto, gotoPdfPage],
