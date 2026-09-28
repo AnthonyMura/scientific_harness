@@ -12,6 +12,7 @@ import { markdown } from "@codemirror/lang-markdown";
 import { latexLanguage } from "../latexMode";
 import { latexCompletionSource, latexCompletionTheme, reOpenEnvPicker } from "../latexCompletions";
 import { bibLanguage } from "../bibMode";
+import { jsonLanguage, yamlLanguage, tomlLanguage, iniLanguage, xmlLanguage } from "../textModes";
 import { formatBib } from "../bibFormat";
 import { bibIndex } from "../bibIndex";
 import { vesperHighlight } from "../vesperTheme";
@@ -66,15 +67,22 @@ export const EDITOR_DEFAULTS: ModuleSettings = {
 /** Autosave debounce: the disk follows the last keystroke after this pause. */
 const AUTO_SAVE_MS = 1000;
 
-/** Language mode by extension: md/markdown → Markdown, tex/sty/cls → LaTeX
- *  (with the Overleaf-style autocomplete overlay), bib/rbib → BibTeX;
- *  anything else (.txt, .json, ...) opens as plain text. */
+/** Language mode by extension: md/markdown → Markdown, tex/sty/cls/ins/dtx/ltx
+ *  → LaTeX (with the Overleaf-style autocomplete overlay), bib/rbib → BibTeX,
+ *  json → JSON, yaml/yml → YAML, toml → TOML, ini/cfg/conf → INI config,
+ *  xml/svg/html/htm → XML; anything else (.txt, .log, .csv, ...) opens as
+ *  plain text. */
 function langForPath(p: string): Extension[] {
   const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
   if (ext === "md" || ext === "markdown") return [markdown()];
-  if (ext === "tex" || ext === "sty" || ext === "cls")
+  if (ext === "tex" || ext === "sty" || ext === "cls" || ext === "ins" || ext === "dtx" || ext === "ltx")
     return [latexLanguage, EditorState.languageData.of(() => [{ autocomplete: latexCompletionSource }]), latexCompletionTheme];
   if (ext === "bib" || ext === "rbib") return [bibLanguage];
+  if (ext === "json") return [jsonLanguage];
+  if (ext === "yaml" || ext === "yml") return [yamlLanguage];
+  if (ext === "toml") return [tomlLanguage];
+  if (ext === "ini" || ext === "cfg" || ext === "conf") return [iniLanguage];
+  if (ext === "xml" || ext === "svg" || ext === "html" || ext === "htm") return [xmlLanguage];
   return [];
 }
 
