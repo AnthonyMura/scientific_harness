@@ -14,8 +14,6 @@ from pathlib import Path
 
 from .errors import ApiError
 
-EDITABLE_SUFFIXES = {".tex", ".md"}
-
 #: Safety cap for raw image serving (tree thumbnails, M3).
 RAW_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
@@ -69,7 +67,7 @@ def read_file(root: Path, rel: str) -> dict:
     try:
         content = p.read_text(encoding="utf-8")
     except UnicodeDecodeError:
-        raise ApiError(415, "binary file; only .tex/.md text files are editable") from None
+        raise ApiError(415, "binary file; only UTF-8 text files can be opened in the editor") from None
     return {"path": rel, "content": content}
 
 
