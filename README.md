@@ -51,6 +51,7 @@ Implemented in this slice:
 - Paragraph position tags above each text paragraph (a marker like `S1·SS1·P2·L24` with bold section/subsection/paragraph counters plus line number); a pure overlay that never touches the document, toggleable from the gear menu
 - Line numbers on by default, toggleable; the active line's number sits in a slightly lighter cell so the cursor is never lost
 - Structure module (sidebar, next to Explorer): outlines the focused surface (LaTeX sections/subsections/paragraphs with S/SS tags, Markdown ATX headings, or the displayed PDF's bookmarks); clicking a row jumps the editor cursor or scrolls the PDF
+- `.tex` comment toggle: hide full-line `%` comments from view for a clean writing view — display-only (the file on disk is never touched), line numbers keep their real positions with gaps, `%` lines inside verbatim environments stay visible, and hidden lines are excluded from search while hidden (noted in the settings menu and as a header chip)
 - Common text formats open with per-format highlighting: LaTeX, Markdown, BibTeX, JSON, YAML/TOML/INI config and XML/HTML (no new dependencies); .txt, .csv/.tsv and .log stay plain; 'New File…' offers each type and tree rows show a dedicated icon per format
 - Editor preferences (cursor style, spell-check, dictionaries, line numbers, paragraph tags) live in the editor's gear menu
 
