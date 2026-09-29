@@ -1,6 +1,6 @@
 # 43 — Project templates and "Fill with structure" (draft vision)
 
-Status: needs-triage
+Status: resolved
 
 **Draft vision for author review, not yet a development ticket.** The author asked
 for an expanded proposal on 2026-09-30; this file is that proposal. Once the open
@@ -307,3 +307,78 @@ the default template, "shape after clone" as a design principle, root README,
 whole-folder ignores, and the `scaffold: …` commit convention. Questions 4, 9, 10
 resolved; remaining open questions 1–3, 5–8 carry their proposed defaults in the
 text — final sign-off pending before this becomes the development ticket.
+
+Fourth round (2026-09-30): implementation sign-off. The author's instruction was
+"implement" — open questions 1–3 and 5–8 are closed with their proposed defaults:
+
+- Q1 semantic section filenames (`introduction.tex`, …) — shipped as written.
+- Q2 `classic` kept alongside; `manuscript` is the default (manifest
+  `default: true`; the picker preselects it).
+- Q3 v0 ships `manuscript` and `classic` only; `report` deferred — the
+  manifest/picker design takes it on later without changes.
+- Q5 `notes/` gets the README only — no `todos.md`.
+- Q6 menu entry stays "Fill with structure…" (working name kept).
+- Q7 commit is offered as a button in the success state, never automatic. In
+  practice the baseline init commits everything (`scaffold: fill with structure
+  (<id>)`), so the follow-up commit step appears only when a repo already had
+  uncommitted changes of its own.
+- Q8 dry-run shows the delta only — "Will be created (N)" plus "Left untouched
+  (M)"; no full-tree rendering.
+
+Deviations from the ticket's premise, recorded here:
+
+1. **#42 was not implemented** when this work started ("the sidecar already owns
+   system-git access" was false). Minimal git plumbing was built inside this
+   ticket instead — `workbench_backend/git.py` (`git_available`, `repo_status`,
+   `init_and_commit`, `commit_all`) plus three endpoints: `POST /api/git/init`
+   (init + baseline commit of everything; early return when already a repo with
+   commits), `POST /api/git/commit`, and the fill/new-project responses gaining
+   `git {repo, initialized}`. #42 stays open for the fuller git module
+   (snapshot-on-significant-event policy, history UI); its "Initialize
+   repository" action is now this endpoint.
+2. **BibTeX cannot parse commented-out entries** — a `%`-commented `@article` in
+   `references.bib` breaks bibtex on the first pass. The template therefore
+   ships two *active* sample entries (`example2024`, `examplebook`) and keeps no
+   `@` at all in its `.bib` comments; `main.tex` cites one of them so the build
+   exercises the full pdflatex → bibtex → pdflatex ×2 cycle.
+3. **`\Bbbk already defined`** (TL2023): newpxmath redefines symbols amssymb
+   also defines, and load order matters — both templates now load `amsmath`,
+   `amssymb`, `amsfonts` *before* the newpx packages. Fixed in `manuscript`
+   during this work; applied to `classic` as well (the Appendix A snippet in
+   docs/workbench_v0_plan.md is illustrative and keeps the pre-fix order).
+
+Shipped behavior worth pinning down (verified end-to-end by headless-Chrome CDP,
+22/22 checks):
+
+- New project: name sanitized (spaces → dashes), an existing folder gets a `-N`
+  suffix; copytree of the template minus `manifest.json`; config written with
+  `{main_file, target:"auto", template:<id>}`; git init + baseline commit
+  `scaffold: create from template <id>`; a missing or failing git never blocks
+  creation (a banner in the modal instead).
+- Fill: non-destructive by construction — apply copies only files that do not
+  exist yet (`copy2`, source mtimes preserved); an existing `main.tex` is left
+  untouched and a project with no `main.tex` gets the template's; idempotent
+  (a second dry-run reports nothing to create); markdown-only + LaTeX template
+  shows a warning in the preview; fill never changes `main_file` or `target`, it
+  only adds the `"template"` provenance key.
+- Fill on a non-repo: no silent init — the success state offers "Initialize
+  repository" (button), which runs init + baseline commit with the prefilled
+  message and then reports "Repository initialized — the filled files are
+  committed as the baseline."
+
+## Answer
+
+Implemented and verified (2026-09-30). Two built-in templates ship as plain
+folders under `workbench/backend/templates/` (`manuscript`, default, 13 files;
+`classic`, 2 project files) with an optional `manifest.json`; the New… modal
+picks a template via radio cards (name, one-line description, expandable file
+list); new projects get a git baseline commit. "Fill with structure…" in the
+project settings menu fills any existing project non-destructively: dry-run
+delta preview first, apply creates only missing files, idempotent, provenance
+recorded; on a non-repo it offers (never performs) repository initialization.
+Q1–Q8 closed with their proposed defaults; #42's git premise was false, so
+minimal git endpoints were built in-ticket and #42 stays open. Verified: both
+templates compile clean under system TeX (latexmk exit 0), and the full UI flow
+passes 22/22 headless-Chrome CDP checks (picker, creation with baseline commit,
+idempotent fill, markdown warning, dry-run delta, apply, init offer, post-init
+state, explorer tree).
