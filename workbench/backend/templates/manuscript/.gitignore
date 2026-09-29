@@ -1,0 +1,9 @@
+# app state + compile artifacts (aux/log/out/synctex/final PDF)
+.workbench/
+# milestone PDFs — the folder itself stays tracked via README.md
+versions/*.pdf
+# big binaries stay on disk, out of git
+figures/
+data/
+# LaTeX artifacts if a build ever leaks outside .workbench/build
+*.aux *.log *.out *.fls *.toc *.synctex.gz *.fdb_latexmk

@@ -1,0 +1,8 @@
+{
+  "name": "Manuscript",
+  "description": "Journal manuscript: one file per section, figures, tables, references, notes.",
+  "kind": "latex",
+  "main_file": "main.tex",
+  "tex_packages": ["newpxtext", "newpxmath", "microtype", "booktabs", "hyperref"],
+  "default": true
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Classic single-file",
+  "description": "One main.tex with the whole document — the original classic book layout.",
+  "kind": "latex",
+  "main_file": "main.tex",
+  "tex_packages": ["newpxtext", "newpxmath", "microtype", "booktabs", "hyperref"]
+}
