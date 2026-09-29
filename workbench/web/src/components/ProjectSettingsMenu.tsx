@@ -158,6 +158,18 @@ export default function ProjectSettingsMenu({ x, y, ctx, onClose }: Props) {
           </div>
         </div>
       )}
+      <div className="menu-sep" />
+      <button
+        type="button"
+        className="menu-item"
+        title="Add the missing files of a project template without touching anything that exists (dry-run first)"
+        onClick={() => {
+          onClose();
+          ctx.onFillStructure();
+        }}
+      >
+        Fill with structure…
+      </button>
     </div>,
     document.body,
   );

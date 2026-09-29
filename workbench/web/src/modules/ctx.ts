@@ -125,4 +125,6 @@ export interface AppCtx {
   explorerStale: boolean;
   /** Clear the stale flag (the Explorer finished a full reload). */
   clearExplorerStale: () => void;
+  /** Open the "Fill with structure" modal for the current project (issue 43). */
+  onFillStructure: () => void;
 }
