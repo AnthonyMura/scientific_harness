@@ -108,68 +108,99 @@ def local_install_spec():
     return None
 
 
-def probe_tinytex() -> TargetStatus:
+def _template_extra_files(st) -> list[tuple[str, str]]:
+    """Per-template tex_packages for the open project (issue 43).
+
+    Extends the single-source-of-truth REQUIRED_FILES list with packages the
+    current project's template declares. Returns (file, tlmgr-package) pairs
+    not already covered by REQUIRED_FILES; [] when nothing is open or known.
+    """
+    if st is None:
+        return []
+    cur_root = st.get("current_project")
+    if not cur_root:
+        return []
+    try:
+        from . import projects as _projects
+        cfg = state.load_project_config(Path(cur_root))
+        tpl_id = cfg.get("template")
+        if not tpl_id:
+            return []
+        m = _projects.template_manifest(tpl_id)
+    except (OSError, ApiError):
+        return []
+    covered = {f for f, _ in REQUIRED_FILES}
+    extra = []
+    for pkg in m.get("tex_packages") or []:
+        fname = f"{pkg}.sty"
+        if fname not in covered:
+            covered.add(fname)
+            extra.append((fname, tinytex.FILE_TO_PKG.get(fname, pkg)))
+    return extra
+
+
+def probe_tinytex(st=None) -> TargetStatus:
     """The in-app TinyTeX: a hidden TeX Live inside the app folder."""
-    st = TargetStatus(name="in-app TinyTeX", available=True, recommended=True)
+    stt = TargetStatus(name="in-app TinyTeX", available=True, recommended=True)
     prefix = tinytex.find_prefix()
     if prefix is None:
-        st.detail = (
+        stt.detail = (
             f"not installed yet. Installs into {tinytex.texlive_dir()} — a hidden folder "
             "inside the app directory, used and modified only by this app."
         )
-        st.can_install = True
-        st.install_hint = (
+        stt.can_install = True
+        stt.install_hint = (
             "Downloads the official TinyTeX-1 release (~50 MB) and extracts it into the "
             "app's hidden .texlive folder. No admin rights needed; packages missing from "
             "your documents are added automatically as you compile."
         )
-        st.install_command = f"(runs inside the app → {tinytex.texlive_dir()})"
-        return st
+        stt.install_command = f"(runs inside the app → {tinytex.texlive_dir()})"
+        return stt
     b = tinytex.bin_dir(prefix)
     if b is None or not (b / "latexmk").exists():
-        st.detail = f"found at {prefix} but incomplete — reinstall to repair"
-        st.can_install = True
-        st.install_hint = "Re-runs the installer: updates the existing copy and repairs missing parts."
-        st.install_command = f"(runs inside the app → {prefix})"
-        return st
-    st.tex_found = True
-    st.version = tinytex.version_lines(prefix)
+        stt.detail = f"found at {prefix} but incomplete — reinstall to repair"
+        stt.can_install = True
+        stt.install_hint = "Re-runs the installer: updates the existing copy and repairs missing parts."
+        stt.install_command = f"(runs inside the app → {prefix})"
+        return stt
+    stt.tex_found = True
+    stt.version = tinytex.version_lines(prefix)
     if (b / "kpsewhich").exists():
-        for fname, pkg in REQUIRED_FILES:
+        for fname, pkg in REQUIRED_FILES + _template_extra_files(st):
             rc, out = _run([str(b / "kpsewhich"), fname], timeout=15)
             if rc != 0 or not out.strip():
-                st.missing.append({"file": fname, "package": pkg})
-    extra = f"; missing {len(st.missing)} required file(s)" if st.missing else ""
-    st.detail = f"installed in {prefix}{extra}"
-    st.can_install = True
-    st.install_hint = "Updates the in-app copy (tlmgr update) and re-checks the template packages."
-    st.install_command = f"(runs inside the app → {prefix})"
-    return st
+                stt.missing.append({"file": fname, "package": pkg})
+    extra = f"; missing {len(stt.missing)} required file(s)" if stt.missing else ""
+    stt.detail = f"installed in {prefix}{extra}"
+    stt.can_install = True
+    stt.install_hint = "Updates the in-app copy (tlmgr update) and re-checks the template packages."
+    stt.install_command = f"(runs inside the app → {prefix})"
+    return stt
 
 
-def probe_local() -> TargetStatus:
-    st = TargetStatus(name="local", available=True)
+def probe_local(st=None) -> TargetStatus:
+    stt = TargetStatus(name="local", available=True)
     if shutil.which("latexmk"):
         rc, out = _run(["latexmk", "--version"], timeout=20)
-        st.tex_found = True
-        st.version = out.splitlines()[0] if out else "unknown"
-        st.detail = st.version
+        stt.tex_found = True
+        stt.version = out.splitlines()[0] if out else "unknown"
+        stt.detail = stt.version
     else:
-        st.detail = "no TeX installation found on this host"
-    if st.tex_found and shutil.which("kpsewhich"):
-        for fname, pkg in REQUIRED_FILES:
+        stt.detail = "no TeX installation found on this host"
+    if stt.tex_found and shutil.which("kpsewhich"):
+        for fname, pkg in REQUIRED_FILES + _template_extra_files(st):
             rc, out = _run(["kpsewhich", fname], timeout=15)
             if rc != 0 or not out.strip():
-                st.missing.append({"file": fname, "package": pkg})
+                stt.missing.append({"file": fname, "package": pkg})
     spec = local_install_spec()
     if spec:
         cmd, hint = spec
-        st.can_install = True
-        st.install_hint = hint
-        st.install_command = " ".join(shlex.quote(c) for c in cmd)
+        stt.can_install = True
+        stt.install_hint = hint
+        stt.install_command = " ".join(shlex.quote(c) for c in cmd)
     else:
-        st.detail += " (no supported installer found on this OS)"
-    return st
+        stt.detail += " (no supported installer found on this OS)"
+    return stt
 
 
 def _wsl_distro_for(st) -> str | None:
@@ -198,7 +229,7 @@ def probe_wsl(st) -> TargetStatus:
         stt.detail = "no WSL distro found (run `wsl --install`)"
         return stt
     base = ["wsl.exe", "-d", distro]
-    files = " ".join(f for f, _ in REQUIRED_FILES)
+    files = " ".join(f for f, _ in REQUIRED_FILES + _template_extra_files(st))
     script = (
         "for f in " + files + "; do p=$(kpsewhich \"$f\" 2>/dev/null); "
         "if [ -n \"$p\" ]; then echo \"OK $f\"; else echo \"MISSING $f\"; fi; done; "
@@ -211,7 +242,7 @@ def probe_wsl(st) -> TargetStatus:
         stt.detail = f"WSL distro {distro} did not respond ({out or 'timeout'})"
         return stt
     lines = (out or "").splitlines()
-    pkg_of = dict(REQUIRED_FILES)
+    pkg_of = dict(REQUIRED_FILES + _template_extra_files(st))
     for ln in lines:
         if ln.startswith("MISSING "):
             fname = ln.split(" ", 1)[1]
@@ -267,7 +298,7 @@ def probe_ssh(st) -> TargetStatus:
 
 
 def status(st) -> list[dict]:
-    out = [probe_tinytex(), probe_local()]
+    out = [probe_tinytex(st), probe_local(st)]
     if host_os() == "windows":
         out.append(probe_wsl(st))
     out.append(probe_ssh(st))

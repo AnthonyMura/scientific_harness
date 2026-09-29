@@ -20,7 +20,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
-from . import __version__, compile_service, files, install, projects, state
+from . import __version__, compile_service, files, git as gitsvc, install, projects, state
 from .errors import ApiError
 from .jobs import JobRegistry
 
@@ -74,7 +74,17 @@ def create_app(token: str) -> FastAPI:
     def projects_new(body: dict):
         name = _body_str(body, "name")
         location = body.get("location") or None
-        return projects.new_project(st, name, location)
+        template = body.get("template") or None
+        return projects.new_project(st, name, location, template)
+
+    @app.post("/api/projects/fill")
+    def projects_fill(body: dict):
+        tpl = _body_str(body, "template")
+        return projects.fill_project(st, tpl, bool(body.get("apply")))
+
+    @app.get("/api/templates")
+    def templates_list():
+        return {"templates": projects.list_templates()}
 
     @app.get("/api/projects/recent")
     def projects_recent():
@@ -263,6 +273,28 @@ def create_app(token: str) -> FastAPI:
         target = _body_str(body, "target")
         distro = body.get("distro") or None
         return {"job_id": install.start_install(st, jobs, target, distro)}
+
+    # --- git (minimal service for issue 43; the broader story is issue 42) ----
+    @app.post("/api/git/init")
+    def git_init(body: dict):
+        root = projects.root_of(st)
+        st0 = gitsvc.repo_status(root)
+        if st0["repo"] and st0["initialized"]:
+            return {"git": st0, "committed": False, "detail": "already a repository with commits"}
+        message = (body.get("message") or "scaffold: initialize repository").strip()
+        info = gitsvc.init_and_commit(root, message)
+        return {
+            "git": {"repo": info["repo"], "initialized": info["initialized"]},
+            "committed": info["committed"],
+            "detail": info.get("detail", ""),
+        }
+
+    @app.post("/api/git/commit")
+    def git_commit(body: dict):
+        root = projects.root_of(st)
+        message = _body_str(body, "message")
+        gitsvc.commit_all(root, message)
+        return {"ok": True}
 
     # --- built web UI (served same-origin with the API) ------------------------
     web_dist = Path(__file__).resolve().parent.parent.parent / "web" / "dist"
