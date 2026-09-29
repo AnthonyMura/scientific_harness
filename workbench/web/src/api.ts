@@ -116,6 +116,8 @@ export const api = {
   texFiles: () => request<{ files: string[] }>("GET", "/api/files/tex"),
   /** All .bib files in the project - feeds citation-key autocomplete. */
   bibFiles: () => request<{ files: string[] }>("GET", "/api/files/bib"),
+  /** All image files in the project (path + size) - feeds \includegraphics autocomplete. */
+  imageFiles: () => request<{ files: { path: string; size: number }[] }>("GET", "/api/files/images"),
   /** Copy a project file to another project path (Save As / duplicate). */
   copyFile: (from: string, to: string) =>
     request<{ from: string; to: string }>("POST", "/api/files/copy", { from, to }),
