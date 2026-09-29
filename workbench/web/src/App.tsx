@@ -2,8 +2,10 @@
 // the layout reducer; hands every module a shared AppCtx.
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { api, initApi } from "./api";
-import type { ActiveJob, Project, SshConfig, TargetStatus } from "./types";
+import type { ActiveJob, Project, SshConfig, TargetStatus, Template } from "./types";
+import FillStructureModal from "./components/FillStructureModal";
 import ProjectBar from "./components/ProjectBar";
+import TemplatePicker from "./components/TemplatePicker";
 import Workbench from "./components/Workbench";
 import type { AppCtx, EditorContentHandle, EditorSaveHandle, PdfPageRequest, SyncRequest } from "./modules/ctx";
 import { findParent, groupOfTab, layoutReducer, loadPersistedLayout, persistLayout } from "./modules/layout";
@@ -19,6 +21,12 @@ export default function App() {
   const [job, setJob] = useState<ActiveJob | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [newName, setNewName] = useState("");
+  /** Project templates for the New-project picker (issue 43). */
+  const [templates, setTemplates] = useState<Template[]>([]);
+  /** Template selected in the New-project modal (""). */
+  const [newTpl, setNewTpl] = useState("");
+  /** "Fill with structure" modal for the current project (issue 43). */
+  const [showFill, setShowFill] = useState(false);
   const [showOpen, setShowOpen] = useState(false);
   const [openPath, setOpenPath] = useState("");
   const [pdfVersion, setPdfVersion] = useState(0);
@@ -131,6 +139,24 @@ export default function App() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load the project templates once (issue 43); preselect the default one.
+  useEffect(() => {
+    let alive = true;
+    void api
+      .templates()
+      .then((r) => {
+        if (!alive) return;
+        setTemplates(r.templates);
+        setNewTpl((cur) => cur || r.templates.find((t) => t.default)?.id || r.templates[0]?.id || "");
+      })
+      .catch(() => {
+        // keep an empty picker — creating still works with the server default
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // Poll the active job (compile or install) while it runs.
@@ -246,7 +272,7 @@ export default function App() {
     const name = newName.trim();
     if (!name) return;
     try {
-      const p = await api.newProject(name);
+      const p = await api.newProject(name, undefined, newTpl || undefined);
       setProject(p);
       setExplorerStale(true); // tree may be stale until a full reload (issue 41)
       dispatch({ type: "resetTabs" });
@@ -254,6 +280,10 @@ export default function App() {
       setShowNew(false);
       setNewName("");
       void refreshRecent();
+      // Git never blocks creation — but say so when the repo could not start.
+      if (p.git && !p.git.repo) {
+        setBanner("Project created without a git repository — the git binary was not found.");
+      }
     } catch (e) {
       setBanner(errMsg(e));
     }
@@ -502,6 +532,12 @@ export default function App() {
   /** The Explorer finished a full reload - the stale flag (issue 41) is settled. */
   const clearExplorerStale = useCallback(() => setExplorerStale(false), []);
 
+  /** Open "Fill with structure" for the current project (issue 43). */
+  const onFillStructure = useCallback(() => {
+    if (!project) return;
+    setShowFill(true);
+  }, [project]);
+
   // --- module context -----------------------------------------------------
 
   const activeFile = useMemo(() => {
@@ -628,6 +664,7 @@ export default function App() {
       bumpTree,
       explorerStale,
       clearExplorerStale,
+      onFillStructure,
       autoCompile: !!project?.auto_compile,
       onAutoCompile: (on) => void setAutoCompile(on),
       targetStatuses,
@@ -655,7 +692,7 @@ export default function App() {
       gotoPdfPage,
     }),
     [project, activeFile, editorFocused, pdfFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
-     setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree, explorerStale, clearExplorerStale,
+     setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree, explorerStale, clearExplorerStale, onFillStructure,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave, registerEditorContent,
      editorContents, editorContent, subscribeEditorContent, pdfGoto, gotoPdfPage],
@@ -689,8 +726,9 @@ export default function App() {
                 }}
                 placeholder="Project name"
               />
+              <TemplatePicker templates={templates} selected={newTpl} onSelect={setNewTpl} />
               <div className="muted">
-                Created under ~/Documents/Workbench with the classic template.
+                Created under ~/Documents/Workbench from the selected template.
               </div>
               <div className="card-actions">
                 <button onClick={() => setShowNew(false)}>Cancel</button>
@@ -729,6 +767,17 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {showFill && project && (
+        <FillStructureModal
+          project={project}
+          templates={templates}
+          onClose={() => setShowFill(false)}
+          onApplied={() => {
+            bumpTree();
+            void refreshTexFiles();
+          }}
+        />
       )}
       {banner && (
         <div className="banner" onClick={() => setBanner(null)}>
