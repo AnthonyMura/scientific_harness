@@ -55,6 +55,7 @@ Implemented in this slice:
 - Common text formats open with per-format highlighting: LaTeX, Markdown, BibTeX, JSON, YAML/TOML/INI config and XML/HTML (no new dependencies); .txt, .csv/.tsv and .log stay plain; 'New File…' offers each type and tree rows show a dedicated icon per format
 - After any top-bar project change (Recent…, Open…, New…) the Explorer's refresh button turns red until a full tree reload succeeds — an explicit cue that the tree may be out of date and that clicking it makes sure
 - Editor preferences (cursor style, spell-check, dictionaries, line numbers, paragraph tags) live in the editor's gear menu
+- Project templates and "Fill with structure": new projects are created from a template picker (radio cards with name, one-line description and expandable file list — `manuscript` default, `classic` alongside); existing projects can fill in the missing structure from any template via the project settings menu — non-destructive dry-run preview first, idempotent, provenance recorded; new projects get a git baseline commit, and filling a non-repo offers "Initialize repository" (never auto-inits; a missing git binary never blocks)
 
 Not in this slice: LLM, Zotero, block IDs. Plan and milestones: [docs/workbench_v0_plan.md](docs/workbench_v0_plan.md).
 
