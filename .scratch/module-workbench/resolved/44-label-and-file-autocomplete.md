@@ -1,6 +1,6 @@
 # 44 — Label & file autocomplete (\ref{…}, \input{…}, …)
 
-Status: needs-triage
+Status: resolved (2026-09-30)
 Module: editor
 Related: resolved 23 (command/environment autocomplete), 29 (citation-key
 autocomplete). This ticket extends the same overlay to **project-local targets**:
@@ -112,19 +112,42 @@ out of v0 scope unless cheap.
 - CDP suite (headless Chrome :9333, fresh user-data-dir; test project with
   `main.tex` + `\input{sub.tex}`, a figure/table/equation each carrying a label
   in both files, an `images/` dir with a `.png`, and `refs.bib`):
-  - [ ] `\ref{` → overlay lists labels from **both** files with type badges +
+  - [x] `\ref{` → overlay lists labels from **both** files with type badges +
         caption hints; typing filters; Enter inserts the key
-  - [ ] `\eqref{`, `\autoref{`, `\cref{` show the same list (eqref hint is the
+  - [x] `\eqref{`, `\autoref{`, `\cref{` show the same list (eqref hint is the
         equation number)
-  - [ ] after a compile, label hints upgrade to real numbers/pages from `.aux`
-  - [ ] `\input{` → lists `main.tex` / `sub.tex` with relative paths; current
+  - [x] after a compile, label hints upgrade to real numbers/pages from `.aux`
+  - [x] `\input{` → lists `main.tex` / `sub.tex` with relative paths; current
         file excluded or marked
-  - [ ] `\includegraphics{` → lists the image with its relative path
-  - [ ] `\bibliography{` → lists `refs.bib`; comma re-query works
-  - [ ] a duplicated label appears twice, both rows flagged
-  - [ ] project with no labels → no overlay, normal completion proceeds
+  - [x] `\includegraphics{` → lists the image with its relative path
+  - [x] `\bibliography{` → lists `refs.bib`; comma re-query works
+  - [x] a duplicated label appears twice, both rows flagged
+  - [x] project with no labels → no overlay, normal completion proceeds
 
 ## Comments
 
 - Created 2026-09-29 from the user request; expanded above to all command and
   index variants (A–E).
+- Resolved 2026-09-30. Label index in `web/src/labelIndex.ts` (scan every
+  `.tex`, kind by enclosing environment, hint = caption → section title →
+  snippet; duplicate keys flagged on every row; aux enrichment via
+  `\newlabel{key}{{num}{page}}` once a compile has run — event-driven
+  freshness, no mtime polling). Completions in `web/src/latexCompletions.ts`:
+  ref-arg commands (`\ref`, `\eqref`, `\autoref`, `\cref`, `\Cref`, `\vref`,
+  `\Vref`, `\pageref`, `\nameref`, `\vnameref`, `\hyperref` — first arg
+  completed, `{}` inserted for the second with the caret inside) and file-arg
+  commands (`\input`/`\include` relative to the current file's directory with
+  the current file excluded, `\bibliography` with comma-requery,
+  `\includegraphics` with KB size from the new `GET /api/files/images`).
+  Overlay opens only when the index is non-empty; stays open while typing
+  inside braces. Two late fixes found by the CDP suite: (1) the bib filter
+  inverted (`!isBib && f !== currentFile`) emptied every `\bibliography` list;
+  (2) CodeMirror's `sortOptions` dedupes options by (label, detail), so once
+  aux enrichment made both rows of a duplicate label identical one vanished —
+  duplicate rows now carry their definition site (`file:line`) in the detail.
+  Verified by a 44-check CDP suite (fresh Chrome :9333 against a fixture
+  project with labels in two files, an image, `refs.bib`, and a duplicated
+  section label): pre-compile hints, post-compile aux numbers/pages, all ten
+  ref commands, file/image/bib candidates, validFor typing-filter behavior,
+  hyperref insertion, and the no-labels project. Deferred as recorded: D
+  (label-name suggestions) is v1; `.tex`-only index per scope.
