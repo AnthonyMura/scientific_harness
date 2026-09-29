@@ -162,6 +162,12 @@ def create_app(token: str) -> FastAPI:
         root = projects.root_of(st)
         return {"files": files.bib_files(root)}
 
+    @app.get("/api/files/images")
+    def files_images():
+        """All image files in the project (path + size) - feeds \\includegraphics autocomplete."""
+        root = projects.root_of(st)
+        return {"files": files.image_files(root)}
+
     @app.post("/api/files/copy")
     def files_copy(body: dict):
         root = projects.root_of(st)

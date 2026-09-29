@@ -218,6 +218,45 @@ def bib_files(root: Path) -> list[str]:
     return sorted(found)
 
 
+#: Suffixes offered to \includegraphics{…} autocomplete (ticket 44).
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".pdf", ".svg", ".eps"}
+
+
+def image_files(root: Path) -> list[dict]:
+    """All image files in the project, as ``{"path", "size"}`` rows.
+
+    Feeds the \\includegraphics autocomplete overlay - the same walk as
+    tex_files, different suffix set. Sizes (bytes) let the editor show a
+    KB hint on each row; project-relative paths, sorted by path.
+    """
+    root_resolved = root.resolve()
+    found: list[dict] = []
+
+    def walk(d: Path) -> None:
+        try:
+            children = sorted(d.iterdir(), key=lambda p: p.name.lower())
+        except OSError:
+            return
+        for child in children:
+            if child.name.startswith("."):
+                continue  # dotfiles/dirs (.git, .workbench, ...) are not sources
+            if child.is_dir():
+                walk(child)
+            elif child.suffix.lower() in IMAGE_SUFFIXES:
+                try:
+                    found.append(
+                        {
+                            "path": str(child.relative_to(root_resolved)).replace("\\", "/"),
+                            "size": child.stat().st_size,
+                        }
+                    )
+                except (ValueError, OSError):
+                    pass
+
+    walk(root_resolved)
+    return sorted(found, key=lambda e: e["path"])
+
+
 def copy_file(root: Path, src_rel: str, dst_rel: str) -> dict:
     """Copy a project file to another project path (Save As / duplicate).
 
