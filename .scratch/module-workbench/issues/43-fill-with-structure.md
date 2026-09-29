@@ -170,9 +170,10 @@ data/
   the project is not a repository, fill does **not** silently init — the success
   state offers one click "Initialize repository" (the same action #42's empty state
   shows), which inits and makes a baseline commit of all currently tracked files.
-- **Trade-off to accept consciously:** images and raw data are not backed up by git
-  (author decision). If that changes later, Git LFS is the upgrade path — the ignore
-  rules stay, LFS patterns get added on top.
+- **Trade-off accepted:** images and raw data are not backed up by git (author
+  decision, confirmed 2026-09-30). If that changes later, Git LFS is the upgrade
+  path — the ignore rules stay, LFS patterns get added on top. Confirmed non-goals:
+  no Git LFS and no `.gitattributes` in v0; fill never silently inits a repository.
 
 **Shape after clone.** Git cannot track empty or fully-ignored folders: a fresh
 clone of this project has no `figures/`, `data/` or `versions/`. That is by design —
@@ -258,13 +259,11 @@ field (`{repo: bool, initialized: bool}`) so the UI can offer the right follow-u
    commit when a repo exists?
 8. Dry-run preview: show only the delta (proposal), or the full tree with
    existing items marked as untouched?
-9. Ignore granularity: whole folders (`figures/`, `data/`) vs patterns by
-   extension/size (`*.tif`, `*.csv`)? The proposal is whole folders — simpler, and
-   the folder itself is the contract; per-file patterns would let small images be
-   tracked but blur what "the data folder" means.
-10. Baseline commit messages: `scaffold: create from template <id>` /
-    `scaffold: fill with structure (<id>)` — good convention, or do you want the
-    template name only?
+9. ~~Ignore granularity~~ — resolved (2026-09-30): whole folders (`figures/`,
+   `data/`); the folder itself is the contract, and per-file patterns would blur
+   what "the data folder" means.
+10. ~~Baseline commit messages~~ — resolved (2026-09-30): keep the `scaffold: …`
+    convention as written in Git setup.
 
 ## Verification plan (draft)
 
@@ -301,5 +300,10 @@ development." Awaiting author review of the open questions before implementation
 
 Second round (2026-09-30, same day): author added build-folder hygiene, the
 `versions/` folder, and git init + `.gitignore` for big files; vision updated
-accordingly (Git setup section, template tree, open questions 9–10). Still awaiting
-author review.
+accordingly (Git setup section, template tree, open questions 9–10).
+
+Third round (2026-09-30): author approved the second-round proposals — `data/` in
+the default template, "shape after clone" as a design principle, root README,
+whole-folder ignores, and the `scaffold: …` commit convention. Questions 4, 9, 10
+resolved; remaining open questions 1–3, 5–8 carry their proposed defaults in the
+text — final sign-off pending before this becomes the development ticket.
