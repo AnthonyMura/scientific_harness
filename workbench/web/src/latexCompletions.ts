@@ -10,8 +10,14 @@
 //
 // Inside `\end{…}`, environments currently open in the document are listed
 // first so a mismatched close is easy to avoid.
+//
+// Project-local targets (ticket 44): \ref{…} & kin complete against the
+// project's own labels — grouped by kind, with caption hints and, after a
+// successful compile, number + page from the build's .aux files — while
+// \input/\include/\bibliography/\includegraphics complete against the
+// project's files, paths relative to the current file's directory.
 
-import { Transaction, type EditorState, type Extension } from "@codemirror/state";
+import { Facet, Transaction, type EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   pickedCompletion,
@@ -22,6 +28,7 @@ import {
 } from "@codemirror/autocomplete";
 import { indentUnit } from "@codemirror/language";
 import { bibIndex } from "./bibIndex";
+import { labelIndex, type LabelEntry, type LabelKind } from "./labelIndex";
 
 // ---------------------------------------------------------------------------
 // Environments (completed inside \begin{…} / \end{…})
@@ -121,6 +128,15 @@ const COMMANDS: CmdSpec[] = [
   ["listoftables", "list of tables", undefined, secStructure],
   ["label", "name a reference target for \\ref", "\\label{$0}", secStructure],
   ["ref", "cross-reference to a \\label", "\\ref{$0}", secStructure],
+  ["eqref", "equation number of a \\label (amsmath)", "\\eqref{$0}", secStructure],
+  ["autoref", "auto-named cross-reference (hyperref)", "\\autoref{$0}", secStructure],
+  ["cref", "cleveref — auto-named reference", "\\cref{$0}", secStructure],
+  ["Cref", "cleveref — sentence-start reference", "\\Cref{$0}", secStructure],
+  ["vref", "verbatim cross-reference (hyperref)", "\\vref{$0}", secStructure],
+  ["Vref", "verbatim cross-reference, capitalized", "\\Vref{$0}", secStructure],
+  ["nameref", "name of a \\label (hyperref)", "\\nameref{$0}", secStructure],
+  ["vnameref", "verbatim name of a \\label (hyperref)", "\\vnameref{$0}", secStructure],
+  ["hyperref", "hyperlink to a \\label (hyperref)", "\\hyperref{$0}{}", secStructure],
   ["pageref", "page number of a \\label", "\\pageref{$0}", secStructure],
   ["cite", "citation by key (BibTeX / Zotero)", "\\cite{$0}", secStructure],
   ["citet", "citation — author in text (natbib)", "\\citet{$0}", secStructure],
@@ -130,6 +146,7 @@ const COMMANDS: CmdSpec[] = [
   ["fullcite", "full citation — author + title + year (natbib)", "\\fullcite{$0}", secStructure],
   ["footnote", "footnote text", "\\footnote{$0}", secStructure],
   ["bibitem", "bibliography entry (thebibliography)", "\\bibitem{$0}", secStructure],
+  ["bibliography", "load .bib file(s) into the bibliography", "\\bibliography{$0}", secStructure],
   ["include", "input another file, starting a new page", "\\include{$0}", secStructure],
   ["input", "input another file", "\\input{$0}", secStructure],
   ["newcommand", "define a new command", "\\newcommand{\\$0}{}", secStructure],
@@ -506,9 +523,92 @@ const BARE_ENV_RE = /\\(begin|end)([a-zA-Z]*)$/;
 const CITE_ARG_RE = /\\(cite|citet|citep|citealp|citealt|fullcite)\*?(?:[\t ]*\[[^\]\n]*\])*[\t ]*\{([^{}\n]*)/;
 const secCite: CompletionSection = { name: "References", rank: 0 };
 
-/** Completion source for LaTeX files. Two contexts: an environment name
- *  inside an open \begin{…} / \end{…}, and a command name (\ + letters)
- *  ending at the caret. */
+// Project-local targets (ticket 44). Same shape as CITE_ARG_RE — starred
+// forms and an optional [text] argument are tolerated; group 2 is the text
+// already typed inside the first braces. Numeric section ranks sort before
+// the "dynamic" command sections, so these lead the overlay when they match.
+const REF_ARG_RE = /\\(ref|eqref|autoref|cref|Cref|vref|Vref|pageref|nameref|vnameref|hyperref)\*?(?:[\t ]*\[[^\]\n]*\])*[\t ]*\{([^{}\n]*)/;
+const FILE_ARG_RE = /\\(input|include|bibliography)\*?(?:[\t ]*\[[^\]\n]*\])*[\t ]*\{([^{}\n]*)/;
+const GRAPHICS_ARG_RE = /\\includegraphics\*?(?:[\t ]*\[[^\]\n]*\])*[\t ]*\{([^{}\n]*)/;
+
+const secFigures: CompletionSection = { name: "Figures", rank: 1 };
+const secTables: CompletionSection = { name: "Tables", rank: 1 };
+const secEquations: CompletionSection = { name: "Equations", rank: 1 };
+const secSections: CompletionSection = { name: "Sections", rank: 1 };
+const secOtherLabels: CompletionSection = { name: "Other labels", rank: 1 };
+const secFiles: CompletionSection = { name: "TeX files", rank: 2 };
+const secImages: CompletionSection = { name: "Images", rank: 2 };
+const secBibFiles: CompletionSection = { name: "Bib files", rank: 2 };
+
+/** Carries the project-relative path of the file being edited (set by
+ *  EditorPane) so file completions can compute paths relative to it. The
+ *  combine collapses the facet to a single string ("" when unset). */
+export const filePathFacet = Facet.define<string, string>({
+  combine: (vs) => vs[0] ?? "",
+});
+
+const KIND_SECTION: Record<LabelKind, CompletionSection> = {
+  figure: secFigures,
+  table: secTables,
+  equation: secEquations,
+  section: secSections,
+  other: secOtherLabels,
+};
+
+const KIND_PREFIX: Record<LabelKind, string> = {
+  figure: "Fig.",
+  table: "Tab.",
+  equation: "Eq.",
+  section: "Sec.",
+  other: "",
+};
+
+/** Overlay hint for one label, per command flavor: \eqref wants the number
+ *  in parentheses, \pageref only the page, \nameref/\vnameref always the
+ *  name; everything else shows "Fig. 3.2 · p.2" once a compile has run. */
+function refDetail(l: LabelEntry, cmd: string): string {
+  let detail: string;
+  if (cmd === "pageref") detail = l.page ? `p.${l.page}` : l.hint;
+  else if (cmd === "nameref" || cmd === "vnameref") detail = l.hint;
+  else if (l.number) {
+    const num = cmd === "eqref" ? `(${l.number})` : `${KIND_PREFIX[l.kind]} ${l.number}`.trim();
+    detail = l.page ? `${num} · p.${l.page}` : num;
+  } else detail = l.hint;
+  if (!l.duplicate) return detail;
+  // CodeMirror dedupes options by (label, detail); once aux enrichment makes
+  // both rows of a duplicate label identical, one would vanish silently.
+  // The definition site keeps the two rows distinct.
+  return `⚠ duplicate · ${detail} · ${l.file}:${l.line}`;
+}
+
+/** Project-relative path of `target` as seen from the directory containing
+ *  `fromFile` — LaTeX resolves \input & kin relative to the current file. */
+function relPath(fromFile: string, target: string): string {
+  if (!fromFile) return target;
+  const dir = fromFile.split("/");
+  dir.pop(); // drop the file name → directory (empty when at project root)
+  const parts = target.split("/");
+  let i = 0;
+  while (i < dir.length && i < parts.length - 1 && dir[i] === parts[i]) i++;
+  return [...Array(dir.length - i).fill(".."), ...parts.slice(i)].join("/");
+}
+
+/** Apply for \hyperref{key}{text}: fill the first argument with the key and
+ *  insert a fresh {} pair after it, caret inside the second braces. */
+function hyperrefApply(view: EditorView, completion: Completion, from: number, to: number) {
+  view.dispatch({
+    changes: { from, to, insert: `${completion.label}}{}` },
+    selection: { anchor: from + completion.label.length + 2 },
+    scrollIntoView: true,
+    annotations: [pickedCompletion.of(completion), Transaction.userEvent.of("input.complete")],
+  });
+}
+
+/** Completion source for LaTeX files. Contexts, in priority order: an
+ *  environment name inside an open \begin{…} / \end{…}; citation keys inside
+ *  \citep{…} & kin; project labels inside \ref{…} & kin; file names inside
+ *  \input/\include/\bibliography and image paths inside \includegraphics;
+ *  a bare \begin/\end name; and finally a command name ending at the caret. */
 export const latexCompletionSource: CompletionSource = (context) => {
   const state = context.state;
 
@@ -559,6 +659,75 @@ export const latexCompletionSource: CompletionSource = (context) => {
         validFor: /[a-zA-Z0-9_\-,: ]*/,
       }));
       return { from: keyFrom, to: context.pos, options };
+    }
+  }
+
+  // Cross-reference key inside \ref{…} & kin — labels from the project's own
+  // .tex files, grouped by kind; the hint carries number + page once a
+  // compile has run. \hyperref completes its first argument only and inserts
+  // the second {} pair on pick.
+  const refM = context.matchBefore(REF_ARG_RE);
+  if (refM) {
+    const labels = labelIndex.all();
+    if (labels.length > 0) {
+      const m = REF_ARG_RE.exec(refM.text)!;
+      const cmd = m[1];
+      const inner = m[2] || "";
+      // \hyperref{key}{text}: once the first argument is closed, completing
+      // here would clobber it — stop offering labels.
+      if (cmd === "hyperref" && inner.includes("}")) return null;
+      const options = labels.map((l): Completion => ({
+        label: l.key,
+        detail: refDetail(l, cmd),
+        section: KIND_SECTION[l.kind],
+      }));
+      if (cmd === "hyperref") for (const o of options) o.apply = hyperrefApply;
+      // validFor keeps the overlay open while typing a key inside the braces;
+      // closing the argument re-queries and ends the match.
+      return { from: context.pos - inner.length, to: context.pos, options, validFor: /[a-zA-Z0-9_:.\-]*/ };
+    }
+  }
+
+  // File name inside \input{…} / \include{…} / \bibliography{…} — project
+  // files with paths relative to the current file's directory; the current
+  // file is never listed. \bibliography re-queries per comma like keys.
+  const fileM = context.matchBefore(FILE_ARG_RE);
+  if (fileM) {
+    const m = FILE_ARG_RE.exec(fileM.text)!;
+    const cmd = m[1];
+    const inner = m[2] || "";
+    const isBib = cmd === "bibliography";
+    const list: string[] = isBib ? [...labelIndex.bibFiles()] : [...labelIndex.texFiles()];
+    if (list.length > 0) {
+      const currentFile = state.facet(filePathFacet);
+      const comma = inner.lastIndexOf(",");
+      const segLen = comma < 0 ? inner.length : inner.length - comma - 1;
+      const options = list
+        .filter((f) => isBib || f !== currentFile)
+        .map((f): Completion => ({
+          label: relPath(currentFile, f),
+          detail: isBib ? "bibliography source" : ".tex file",
+          section: isBib ? secBibFiles : secFiles,
+        }));
+      return { from: context.pos - segLen, to: context.pos, options, validFor: /[a-zA-Z0-9_\-./ ,]*/ };
+    }
+  }
+
+  // Image path inside \includegraphics{…} — project images with relative
+  // paths and a KB size hint on each row.
+  const gM = context.matchBefore(GRAPHICS_ARG_RE);
+  if (gM) {
+    const images = labelIndex.imageFiles();
+    if (images.length > 0) {
+      const m = GRAPHICS_ARG_RE.exec(gM.text)!;
+      const inner = m[2] || "";
+      const currentFile = state.facet(filePathFacet);
+      const options = images.map((im): Completion => ({
+        label: relPath(currentFile, im.path),
+        detail: `${Math.max(1, Math.round(im.size / 1024))} KB`,
+        section: secImages,
+      }));
+      return { from: context.pos - inner.length, to: context.pos, options, validFor: /[a-zA-Z0-9_\-./ ]*/ };
     }
   }
 

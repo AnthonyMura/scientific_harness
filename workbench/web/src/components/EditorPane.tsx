@@ -10,11 +10,12 @@ import { acceptCompletion, autocompletion, completionKeymap } from "@codemirror/
 import { bracketMatching, syntaxHighlighting } from "@codemirror/language";
 import { markdown } from "@codemirror/lang-markdown";
 import { latexLanguage } from "../latexMode";
-import { latexCompletionSource, latexCompletionTheme, reOpenEnvPicker } from "../latexCompletions";
+import { filePathFacet, latexCompletionSource, latexCompletionTheme, reOpenEnvPicker } from "../latexCompletions";
 import { bibLanguage } from "../bibMode";
 import { jsonLanguage, yamlLanguage, tomlLanguage, iniLanguage, xmlLanguage } from "../textModes";
 import { formatBib } from "../bibFormat";
 import { bibIndex } from "../bibIndex";
+import { labelIndex } from "../labelIndex";
 import { vesperHighlight } from "../vesperTheme";
 import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
@@ -83,7 +84,9 @@ function langForPath(p: string): Extension[] {
   const ext = p.slice(p.lastIndexOf(".") + 1).toLowerCase();
   if (ext === "md" || ext === "markdown") return [markdown()];
   if (ext === "tex" || ext === "sty" || ext === "cls" || ext === "ins" || ext === "dtx" || ext === "ltx")
-    return [latexLanguage, EditorState.languageData.of(() => [{ autocomplete: latexCompletionSource }]), latexCompletionTheme];
+    // filePathFacet: the file's own path, so \input & kin can offer paths
+    // relative to this file's directory (ticket 44).
+    return [filePathFacet.of(p), latexLanguage, EditorState.languageData.of(() => [{ autocomplete: latexCompletionSource }]), latexCompletionTheme];
   if (ext === "bib" || ext === "rbib") return [bibLanguage];
   if (ext === "json") return [jsonLanguage];
   if (ext === "yaml" || ext === "yml") return [yamlLanguage];
@@ -202,6 +205,11 @@ export default function EditorPane({ ctx, filePath }: Props) {
               if (filePath.endsWith(".bib") || filePath.endsWith(".rbib")) {
                 const root = ctx.projectRoot;
                 if (root) void bibIndex.refresh(root, true); // fresh keys for \citep{…}
+              } else if (filePath.endsWith(".tex")) {
+                const root = ctx.projectRoot;
+                // Fresh labels for \ref{…}; the save also marks any compiled
+                // .aux numbers stale until the next successful compile.
+                if (root) void labelIndex.refresh(root, true);
               }
               return true;
             },
@@ -346,6 +354,27 @@ export default function EditorPane({ ctx, filePath }: Props) {
   useEffect(() => {
     if (ctx.projectRoot) void bibIndex.refresh(ctx.projectRoot);
   }, [ctx.projectRoot]);
+
+  // Keep the label index loaded for the open project — \ref{…} lists the
+  // project's own labels; .tex saves force a re-read (save callback above).
+  useEffect(() => {
+    if (ctx.projectRoot) void labelIndex.refresh(ctx.projectRoot);
+  }, [ctx.projectRoot]);
+
+  // A successful compile writes fresh .aux files with numbers + pages — mark
+  // the label index aux-fresh so \ref{…} hints upgrade to "Fig. 3.2 · p.2".
+  const lastJobRef = useRef<{ id: string; status: string } | null>(null);
+  useEffect(() => {
+    const job = ctx.job;
+    if (!job) return;
+    const prev = lastJobRef.current;
+    lastJobRef.current = { id: job.id, status: job.status };
+    // Fire only on the running→done transition of a specific job.
+    if (job.status === "done" && prev && prev.id === job.id && prev.status !== "done") {
+      void labelIndex.markAuxFresh();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ctx.job?.id, ctx.job?.status]);
 
   // Register this tab's save so Compile can persist open edits before building
   // — a compile reads from disk, unsaved changes would otherwise be lost (M3).
