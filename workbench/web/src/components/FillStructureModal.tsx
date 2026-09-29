@@ -26,6 +26,8 @@ export default function FillStructureModal({ project, templates, onClose, onAppl
   const [gitState, setGitState] = useState<{ repo: boolean; initialized: boolean } | null>(null);
   const [gitMsg, setGitMsg] = useState("");
   const [committed, setCommitted] = useState(false);
+  /** True once an in-modal init committed the baseline (nothing left to commit). */
+  const [inited, setInited] = useState(false);
 
   const loadPreview = useCallback(async (id: string) => {
     setBusy(true);
@@ -67,8 +69,11 @@ export default function FillStructureModal({ project, templates, onClose, onAppl
     setBusy(true);
     setErr(null);
     try {
-      const r = await api.gitInit();
+      // Init commits a baseline of everything present, so the filled files are
+      // already recorded — no follow-up commit is needed.
+      const r = await api.gitInit(gitMsg.trim() || undefined);
       setGitState(r.git);
+      if (r.committed) setInited(true);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -157,36 +162,35 @@ export default function FillStructureModal({ project, templates, onClose, onAppl
                 Structure added to {project.name}.
               </div>
               {err && <div className="fill-warn">{err}</div>}
-              {committed ? (
+              {inited ? (
+                <div className="muted">Repository initialized — the filled files are committed as the baseline.</div>
+              ) : committed ? (
                 <div className="muted">Committed.</div>
               ) : canCommit ? (
-                <>
-                  <input
-                    value={gitMsg}
-                    onChange={(e) => setGitMsg(e.target.value)}
-                    aria-label="Commit message"
-                    placeholder="commit message"
-                  />
-                  <div className="fill-actions">
-                    <button onClick={onClose}>Done</button>
-                    <button className="primary" disabled={!gitMsg.trim() || busy} onClick={() => void commit()}>
-                      {busy ? "Committing…" : "Commit changes"}
-                    </button>
-                  </div>
-                </>
+                <input
+                  value={gitMsg}
+                  onChange={(e) => setGitMsg(e.target.value)}
+                  aria-label="Commit message"
+                  placeholder="commit message"
+                />
               ) : (
-                <>
-                  <div className="muted">
-                    This project is not a git repository yet. Nothing was initialized automatically.
-                  </div>
-                  <div className="fill-actions">
-                    <button onClick={onClose}>Done</button>
-                    <button className="primary" disabled={busy} onClick={() => void initRepo()}>
-                      {busy ? "Initializing…" : "Initialize repository"}
-                    </button>
-                  </div>
-                </>
+                <div className="muted">
+                  This project is not a git repository yet. Nothing was initialized automatically.
+                </div>
               )}
+              <div className="fill-actions">
+                <button onClick={onClose}>Done</button>
+                {canCommit && !committed && !inited && (
+                  <button className="primary" disabled={!gitMsg.trim() || busy} onClick={() => void commit()}>
+                    {busy ? "Committing…" : "Commit changes"}
+                  </button>
+                )}
+                {!canCommit && !inited && (
+                  <button className="primary" disabled={busy} onClick={() => void initRepo()}>
+                    {busy ? "Initializing…" : "Initialize repository"}
+                  </button>
+                )}
+              </div>
             </>
           )}
         </div>
