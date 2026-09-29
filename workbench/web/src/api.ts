@@ -1,8 +1,10 @@
 import type {
   ConfigResponse,
+  FillResult,
   JobError,
   Project,
   TargetStatus,
+  Template,
   TreeResponse,
 } from "./types";
 
@@ -59,10 +61,24 @@ export const api = {
   health: () => request<{ ok: boolean; version: string }>("GET", "/api/health"),
 
   openProject: (path: string) => request<Project>("POST", "/api/projects/open", { path }),
-  newProject: (name: string, location?: string) =>
-    request<Project>("POST", "/api/projects/new", { name, location }),
+  newProject: (name: string, location?: string, template?: string) =>
+    request<Project>("POST", "/api/projects/new", { name, location, template }),
   recentProjects: () => request<{ projects: Project[] }>("GET", "/api/projects/recent"),
   currentProject: () => request<{ project: Project | null }>("GET", "/api/project/current"),
+  /** Built-in project templates for the new-project picker (issue 43). */
+  templates: () => request<{ templates: Template[] }>("GET", "/api/templates"),
+  /** 'Fill with structure': dry-run by default; apply=true copies missing files. */
+  fillProject: (template: string, apply = false) =>
+    request<FillResult>("POST", "/api/projects/fill", { template, apply }),
+
+  /** Initialize a git repository in the current project (issue 43). */
+  gitInit: (message?: string) =>
+    request<{ git: { repo: boolean; initialized: boolean }; committed: boolean; detail: string }>(
+      "POST", "/api/git/init", { message },
+    ),
+  /** Commit all current changes in the project's repository. */
+  gitCommit: (message: string) =>
+    request<{ ok: boolean }>("POST", "/api/git/commit", { message }),
 
   tree: (dir = "", hidden = false) =>
     request<TreeResponse>(

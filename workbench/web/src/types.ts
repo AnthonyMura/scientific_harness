@@ -8,6 +8,34 @@ export interface Project {
   auto_compile: boolean;
   /** SSH compile target config (M4, per project); null/absent = not set. */
   ssh?: SshConfig | null;
+  /** Template id the project was created from / filled with (issue 43). */
+  template?: string | null;
+  /** Git state, present on new-project and fill responses only. */
+  git?: { repo: boolean; initialized: boolean } | null;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  kind: string;
+  main_file: string;
+  tex_packages: string[];
+  /** Every file the template ships (manifest.json excluded), as posix paths. */
+  files: string[];
+  default?: boolean;
+}
+
+export interface FillResult {
+  template: string;
+  /** Template files missing from the project — what Apply would create. */
+  create: string[];
+  /** Template files already present — left untouched, always. */
+  skip: string[];
+  git: { repo: boolean; initialized: boolean };
+  /** Set when a LaTeX template is being filled into a markdown-only project. */
+  warning?: string;
+  applied?: boolean;
 }
 
 export interface SshConfig {
