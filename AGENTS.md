@@ -59,5 +59,6 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
   - `app: <summary>` — top-level shell wiring (App.tsx, ProjectBar)
   - `docs(<area>):` / `chore(<area>):` — documentation and repo hygiene
 - One logical module change per commit. Build artifacts (node_modules, dist, .venv, __pycache__) stay ignored via workbench/.gitignore.
+- **Check branch freshness before adding a new ticket**: always run `git fetch && git status` first — if the local branch is behind origin (outdated), update it (`git pull --rebase`) before writing or committing the ticket, so modifications are never added on top of an outdated branch.
 - **Commit before ending work**: at the end of every task or session, commit all changes — code, docs, tickets — so the working tree is left clean. If something is genuinely unfinished, record its state in the relevant issue ticket under `.scratch/` instead of leaving it uncommitted.
 - **Update repository information after every change** (standing user request): besides the scoped code commits, keep the guides current — the `README.md` status line, the progress note in `docs/workbench_v0_plan.md`, and `AGENTS.md` itself whenever a workflow or environment fact changes. Commit each under its own scope (`docs(...)`, `chore(...)`); do not let docs lag behind shipped behavior.
