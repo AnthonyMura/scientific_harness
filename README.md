@@ -38,7 +38,7 @@ Implemented in this slice:
 - CodeMirror editor inside a recursive split-tree layout (VSCode-style splittable panes)
 - Embedded PDF viewer with SyncTeX; compiling opens the PDF pane to the right of the active editor
 - Streaming log panel with clickable errors
-- In-app TinyTeX: a hidden TeX Live in `workbench/.texlive` that the app installs, updates and extends on demand; missing packages are added automatically during compile
+- In-app TinyTeX: a hidden TeX Live in `workbench/.texlive` that the app installs, updates and extends on demand; missing packages are added automatically during compile — including whole language toolchains (e.g. Russian: T2A Cyrillic encoding, babel + hyphenation, LH font sources), with a one-shot fallback to the official CTAN mirror when the primary mirror ships a partial package
 - Compile (with a "what to compile" picker) in the editor header for .tex files; an Overleaf-style project settings menu (main file from the file list, compile target, auto-compile) opens from a gear next to the project name
 - PDF pane persists output into the project via Save version / Save As; Compile saves open editor edits before building, so an unsaved change is never compiled away
 - Autosave about a second after typing stops; closing a tab or the window flushes whatever is still pending
