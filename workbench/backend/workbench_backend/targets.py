@@ -143,7 +143,10 @@ class LocalTarget(CompileTarget):
         args = (["-f"] if force else []) + LATEXMK_ARGS
         cmd = [str(b / "latexmk") if b else "latexmk", *args, f"-output-directory={build_dir}", main_file]
         return subprocess.Popen(
-            cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env
+            # TeX output can carry raw 8-bit bytes; a strict decode would
+            # raise inside the pump thread and leave the job "running".
+            cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", env=env
         )
 
 
@@ -212,7 +215,8 @@ class WslTarget(CompileTarget):
         )
         return subprocess.Popen(
             base + ["bash", "-lc", script],
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
         )
 
 
@@ -321,7 +325,8 @@ class SshTarget(CompileTarget):
             f"{ssh_compile}\n"
         )
         return subprocess.Popen(
-            ["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+            ["bash", "-c", script], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace"
         )
 
     def collect_artifacts(self, root: Path, main_file: str, build_dir: Path) -> None:

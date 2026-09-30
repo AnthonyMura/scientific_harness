@@ -9,7 +9,11 @@ admin rights, nothing leaks onto PATH outside our subprocesses.
                           make sure the packages the built-in template needs
                           are present (tlmgr installs anything missing).
 - `maybe_install_missing` — called by the compile service after a failed run:
-                          parses "File 'x.sty' not found" out of the log,
+                          parses missing-file lines ("file `x.sty' not
+                           found", case-insensitive), babel "Unknown option
+                           '<lang>'", missing font metrics (TFM), bitmap fonts
+                           whose Metafont sources or GF->PK converter are absent,
+                           out of the log;
                           installs the providing package(s) and lets the
                           compile retry. This is how TinyTeX is meant to be
                           maintained: you only ever install what you use.
@@ -48,16 +52,52 @@ REQUIRED_FILES: list[tuple[str, str]] = [
 ]
 
 # .sty/.cls file -> TeX Live (tlmgr) package that provides it. Anything not
-# listed resolves to its own basename, then to `tlmgr search --file`.
+# listed resolves via `tlmgr search --file`, then to its own basename.
 FILE_TO_PKG = {
     "amssymb.sty": "amsfonts",
     "graphicx.sty": "graphics",
     "times.sty": "psnfss",
     "newpxtext.sty": "newpx",
     "newpxmath.sty": "newpx",
+    # Encoding definition files: the basename is not a tlmgr package name, and
+    # `tlmgr search` only resolves them when the mirror index covers them -
+    # map explicitly (issue 47).
+    "t2aenc.def": "cyrillic",
+    "t2benc.def": "cyrillic",
+    # Babel language modules are per-language packages in current TeX Live;
+    # russian.ldf does not resolve via `tlmgr search` on every mirror (issue 47).
+    "russian.ldf": "babel-russian",
 }
 
-MISSING_FILE_RE = re.compile(r"File [`']([^'`]+)[`]?' not found")
+# "File `foo.sty' not found" / "file `t2aenc.def' not found" - both quote
+# styles, and fontenc's variant is lowercase ("Encoding file ... not found"),
+# so the match must be case-insensitive (issue 47).
+MISSING_FILE_RE = re.compile(r"file [`']([^'`]+)[`]?' not found", re.IGNORECASE)
+
+# babel reports a missing language module as an unknown option, not a missing
+# file (the .ldf lookup happens inside \InputIfFileExists):
+#   ! Package babel Error: Unknown option 'russian'.
+BABEL_LANG_RE = re.compile(r"Package babel Error: Unknown option '([^']+)'")
+
+# fontenc.sty reports missing font metrics without quotes, so MISSING_FILE_RE
+# never sees them: "Font T2A/cmr/m/n/10=larm1000 at 10.0pt not loadable:
+# Metric (TFM) file not found." - the name before " at" is the .tfm base.
+FONT_METRIC_RE = re.compile(
+    r"=([A-Za-z0-9]+) at [\d.]+pt not loadable: Metric \(TFM\) file not found"
+)
+
+# With no Type1 map entry, pdflatex falls back to bitmap fonts and mktexpk
+# must build them from Metafont sources - which a fresh tree may lack (TL2026
+# split the LH fonts out of lhcyr into package `lh`):
+#   kpathsea: Running mktexpk --mfmode / --bdpi 600 ... larm1000
+#   mktexpk: don't know how to create bitmap font for larm1000.
+MF_FONT_RE = re.compile(
+    r"mktexpk: don't know how to create bitmap font for ([A-Za-z0-9]+)\."
+)
+
+# The GF->PK converters ship as their own tlmgr packages; mktexpk names the
+# missing binary: ".../mktexpk: 160: gsftopk: not found".
+FONT_TOOL_RE = re.compile(r"\b(gsftopk|gf2pk|ps2pk): not found")
 
 
 def texlive_dir() -> Path:
@@ -133,31 +173,85 @@ def _file_present(b: Path, fname: str) -> bool:
     return rc == 0 and bool(out.strip())
 
 
+def _pkg_installed(b: Path, pkg: str) -> bool:
+    """True when `pkg` is installed in this TinyTeX tree.
+
+    `tlmgr info <pkg>` exits 0 whether or not the package is installed (it
+    prints the index entry either way); the state lives in the
+    "installed: Yes|No" field of that output."""
+    rc, out = _run([str(b / "tlmgr"), "info", pkg], timeout=60)
+    if rc != 0 or not out:
+        return False
+    for ln in out.splitlines():
+        key, _, val = ln.partition(":")
+        if key.strip() == "installed":
+            return val.strip().lower() == "yes"
+    return False
+
+
+def _pkg_in_index(b: Path, pkg: str) -> bool:
+    """True when the repository index has an entry for `pkg`, installed or not.
+
+    `tlmgr info <pkg>` exits 0 even for unknown packages, so the answer is in
+    the output: a real entry starts with "package: <name>"."""
+    rc, out = _run([str(b / "tlmgr"), "info", pkg], timeout=60)
+    if rc != 0 or not out.strip():
+        return False
+    first = out.strip().splitlines()[0]
+    key, _, val = first.partition(":")
+    return key.strip() == "package" and val.strip() == pkg
+
+
+def _mf_source_candidates(base: str) -> list[str]:
+    """tlmgr package candidates for a missing Metafont source, by font family.
+
+    LH fonts (larm/larb/... — T2A/T2B Cyrillic): package `lh` since TL2026,
+    `lhcyr` before that."""
+    if base.startswith("la"):
+        return ["lh", "lhcyr"]
+    return []
+
+
+def _babel_lang_present(b: Path, lang: str) -> bool:
+    """True only when the per-language package `babel-<lang>` is installed.
+
+    A file check is unreliable here: core Babel 3.x ships a stub module
+    locale/<code>/babel-<lang>.tex for every language inside its own
+    package, so the file sits on disk even while the language data is
+    missing — and `tlmgr remove` leaves those core-owned files behind.
+    The compile then fails with "Unknown option '<lang>'" (issue 47 E2E)."""
+    return _pkg_installed(b, "babel-" + lang)
+
+
 def _pkg_for_file(b: Path, fname: str) -> str | None:
-    """tlmgr package providing `fname`: mapping, basename, then tlmgr search."""
+    """tlmgr package providing `fname`: explicit mapping, tlmgr search, then a guess."""
     base = fname.rsplit(".", 1)[0]
-    guesses = [FILE_TO_PKG.get(fname), FILE_TO_PKG.get(base + ".sty"), base]
-    for g in guesses:
-        if not g:
-            continue
-        rc, out = _run([str(b / "tlmgr"), "search", "--global", "--file", "/" + fname], timeout=60)
-        if rc == 0 and out.strip():
-            # output: "<pkg>:" lines followed by indented file paths
-            for ln in out.splitlines():
-                s = ln.strip()
-                if not s:
-                    continue
-                if s.endswith(":"):
-                    return s[:-1]
-                break  # first hit line without a package header — unknown
-        if rc == 0 and g in (out or ""):
-            return g
-    # fall back to the direct guess; tlmgr install will report if it is bogus
-    return FILE_TO_PKG.get(fname) or base
+    mapped = FILE_TO_PKG.get(fname) or FILE_TO_PKG.get(base + ".sty")
+    if mapped:
+        return mapped
+    rc, out = _run([str(b / "tlmgr"), "search", "--global", "--file", "/" + fname], timeout=60)
+    if rc == 0 and out.strip():
+        # output is a "<pkg>:" header line followed by indented file paths;
+        # skip the "tlmgr: package repository ..." banner (it contains spaces)
+        for ln in out.splitlines():
+            s = ln.strip()
+            if s.endswith(":") and " " not in s[:-1]:
+                return s[:-1]
+    # Metafont sources: this mirror's file index is partial (lh and beamer
+    # are absent from it), so resolve LH bitmap-font sources by font family.
+    if fname.endswith(".mf"):
+        for cand in _mf_source_candidates(base):
+            if _pkg_in_index(b, cand):
+                return cand
+    # fall back to a guess; tlmgr install will report if it is bogus. Babel
+    # language modules are per-language packages (babel-<lang>).
+    if fname.endswith(".ldf"):
+        return f"babel-{base}"
+    return base
 
 
 def _tlmgr_install(b: Path, pkg: str, job=None) -> bool:
-    rc, out = _run([str(b / "tlmgr"), "install", pkg], timeout=600)
+    rc, out = _run([str(b / "tlmgr"), "install", pkg], timeout=1800)
     text = (out or "").strip()
     if job is not None and text:
         for ln in text.splitlines():
@@ -271,8 +365,9 @@ def install(job) -> None:
 # --- on-demand maintenance ----------------------------------------------------
 
 def maybe_install_missing(job, log_text: str) -> list[str]:
-    """After a failed compile: install packages for missing files found in the
-    log. Returns the package names installed (empty => nothing to do)."""
+    """After a failed compile: install the packages for what the log is missing
+    (files, babel languages, font metrics, bitmap-font sources, GF->PK
+    converters). Returns the package names installed (empty => nothing to do)."""
     prefix = find_prefix()
     if prefix is None:
         return []  # never touch system TeX — only our own copy
@@ -287,18 +382,69 @@ def maybe_install_missing(job, log_text: str) -> list[str]:
         if any(f.endswith(x) for x in (".tex", ".aux", ".log", ".pdf", ".png", ".jpg")):
             continue  # missing source/aux files are document errors, not packages
         names.append(f)
+    # babel reports a missing language module as an unknown option, not a
+    # missing file; map it to the .ldf that \usepackage[<lang>]{babel} loads.
+    for m in BABEL_LANG_RE.finditer(log_text or ""):
+        lang = m.group(1).strip().lower()
+        if "=" in lang:  # e.g. main=russian
+            lang = lang.split("=", 1)[1].strip()
+        if lang and "/" not in lang:
+            names.append(lang + ".ldf")
+    # Missing font metrics (e.g. T2A Computer Modern from lhcyr on a fresh
+    # TinyTeX): the name is unquoted, so it needs its own pattern.
+    for m in FONT_METRIC_RE.finditer(log_text or ""):
+        names.append(m.group(1) + ".tfm")
+    # Bitmap fonts whose Metafont sources are absent (TL2026 split the LH
+    # fonts out of lhcyr into package `lh`): mktexpk names the font it cannot
+    # build; resolve its .mf source like any other missing file.
+    for m in MF_FONT_RE.finditer(log_text or ""):
+        names.append(m.group(1) + ".mf")
     installed: list[str] = []
     seen: set[str] = set()
+    failed = getattr(job, "_tinytex_failed", None)
+    if failed is None:
+        failed = set()
+        job._tinytex_failed = failed
     for f in dict.fromkeys(names):  # dedupe, keep order
         if len(installed) >= 6:
             break
-        if _file_present(b, f):
+        if f.endswith(".ldf"):
+            if _babel_lang_present(b, f[: -len(".ldf")]):
+                continue
+        elif _file_present(b, f):
             continue
         pkg = _pkg_for_file(b, f)
         if not pkg or pkg in seen:
             continue
         seen.add(pkg)
+        if pkg in failed:
+            job.log("skipping " + f + " - tlmgr install of `" + pkg + "` failed earlier in this run")
+            continue
         job.log(f"missing {f} — installing tlmgr package `{pkg}` (in-app TinyTeX)")
         if _tlmgr_install(b, pkg, job):
             installed.append(pkg)
+            if f.endswith(".ldf"):
+                # Hyphenation patterns for the language (best effort; they
+                # take effect once the pdflatex format is next regenerated).
+                hyp = "hyphen-" + f[: -len(".ldf")]
+                if hyp not in seen:
+                    seen.add(hyp)
+                    if _tlmgr_install(b, hyp, job):
+                        installed.append(hyp)
+        else:
+            failed.add(pkg)
+    # Missing GF->PK converters named by mktexpk; each ships as a tlmgr
+    # package of the same name (gsftopk). Presence is the binary in bin/.
+    for m in FONT_TOOL_RE.finditer(log_text or ""):
+        tool = m.group(1)
+        if len(installed) >= 6:
+            break
+        if (b / tool).exists() or tool in seen or tool in failed:
+            continue
+        seen.add(tool)
+        job.log(f"missing font tool `{tool}` — installing tlmgr package `{tool}` (in-app TinyTeX)")
+        if _tlmgr_install(b, tool, job):
+            installed.append(tool)
+        else:
+            failed.add(tool)
     return installed
