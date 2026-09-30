@@ -1,6 +1,6 @@
 # 47 — TinyTeX auto-install misses language/encoding packages (Russian T2A + babel)
 
-Status: needs-triage
+Status: resolved (2026-10-01)
 Machine: home
 
 ## Problem (user report)
@@ -84,3 +84,55 @@ compile; today the app only ever installs plain `.sty` packages.
 
 New ticket (2026-09-30); from the user's report of a Russian LaTeX document
 failing in the in-app TinyTeX, with the compile-log analysis quoted above.
+
+## Resolution (2026-10-01, home machine; merged to main as 0a335b8)
+
+Kept strictly on-demand (no language pre-install — the cascade now closes the
+gap end-to-end). Implemented across three commits:
+
+1. `d04c6fa` — the repair cascade in `tinytex.py`: case-insensitive missing-file
+   detection covering lowercase "Encoding file ... not found" (both quote
+   styles); `.def` encoding files flow into `_pkg_for_file()` (tlmgr search
+   resolves `t2aenc.def -> cyrillic`); babel `Unknown option '<lang>'` installs
+   `babel-<lang>` plus best-effort `hyphen-<lang>`; font metrics/sources
+   (`.tfm`/`.mf`) and the GF->PK tools named by mktexpk (`gsftopk`, ...) are
+   detected and installed. `MAX_COMPILE_ATTEMPTS` raised 3 -> 6: a Russian
+   document needs ragged2e -> T2A -> babel-russian -> multirow, i.e. more than
+   three passes (answers the open question below).
+2. `fa334fa` — CTAN fallback: when an install reports success but the file is
+   still missing (the primary mirror tlnet.yihui.org ships partial builds — its
+   `lh` tarball has only X2 sources, no T2A Metafont), retry once from the
+   official CTAN repository (`--reinstall` over the partial package). A failed
+   CTAN retry marks the package failed for the run so the loop terminates.
+3. `3659c68` — `compile_service.py`: clear latexmk's stale `*.fdb_latexmk`
+   before every forced post-install rerun; with the stale fdb, `latexmk -f`
+   reports "All targets up-to-date" and exits without re-running pdflatex, so
+   the repair was never exercised. New `tests/test_compile_service.py` pins the
+   retry decision table (install -> clear + force; stale-refusal marker ->
+   clear + force; no repair -> stop, fdb untouched).
+
+End-to-end verification against the in-app TinyTeX (Russian fixture in
+/home/nk/code/test-latex-project):
+- Cold-state run: attempt 1 "Encoding file `t2aenc.def' not found" +
+  "Unknown option 'russian'" -> installed cyrillic (+bin deps), babel-russian,
+  hyphen-russian (auto-pulling ruhyphen); attempt 2 "Font T2A/cmr/m/n/10 =
+  larm1000 ... Metric (TFM) file not found" -> installed lhcyr; attempt 3 clean
+  full-Cyrillic PDF (6839 B), exit 0.
+- Earlier run: stale-fdb refusal path (marker -> clear -> forced rerun) and
+  `larm1000.mf` -> lh from yihui's partial index -> CTAN fallback reinstall +
+  gsftopk install, both verified in the job log.
+- Idempotency re-run: zero installs, "All targets up-to-date", done (rc 12),
+  PDF present. Tree check: `t2aenc.def`, `russianb.ldf`, `larm1000.tfm` all
+  resolve; cyrillic / babel-russian / hyphen-russian / lhcyr installed.
+- Suite: backend pytest 39/39 (incl. 3 new _pump tests), web vitest 12/12,
+  tsc clean.
+
+Notes for future work:
+- `tlmgr remove --force lh` after a cross-repo `--reinstall` leaves orphaned
+  texmf-var sources behind (the local file record kept the primary mirror's
+  partial list). Harmless — the orphaned `larm1000.mf` actually helps mktexpk
+  regenerate fonts; no code change needed.
+- `CompileService.start()`'s upfront fdb-clear only fires for roots in the
+  in-memory `_failed_roots` set (empty after a sidecar restart); the in-attempt
+  marker path is the backstop for that case. Both layers verified working as
+  designed.
