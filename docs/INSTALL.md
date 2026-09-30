@@ -131,6 +131,24 @@ Notes for native Windows: the in-app TinyTeX has a Windows build, so LaTeX works
 3. The first compile needs TeX: open the **Install** panel and run the TinyTeX install (one-time, a few hundred MB). Afterwards, missing `.sty` packages are installed automatically during compile.
 4. Compile from the editor header (`.tex` files) → the PDF opens to the right with source↔PDF sync; errors in the log jump you to the offending line.
 
+## Running the test gate (development)
+
+The development rules (AGENTS.md, "Development rules") require every implementation change to pass the full suite before it may be merged into `main`:
+
+```bash
+# backend — pytest (one-time install into the venv)
+cd workbench/backend
+./.venv/bin/pip install pytest
+./.venv/bin/python -m pytest
+
+# web — vitest + typecheck/build (vitest comes with npm install; no extra step)
+cd workbench/web
+node_modules/.bin/vitest run
+npm run build
+```
+
+Tests live next to the code they cover: `workbench/backend/tests/` and `*.test.ts(x)` files under `workbench/web/src/`.
+
 ## Troubleshooting
 
 | Symptom | Fix |
