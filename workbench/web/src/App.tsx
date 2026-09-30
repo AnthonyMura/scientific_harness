@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { api, initApi } from "./api";
 import type { ActiveJob, Project, SshConfig, TargetStatus, Template } from "./types";
 import FillStructureModal from "./components/FillStructureModal";
+import OpenProjectModal from "./components/OpenProjectModal";
 import ProjectBar from "./components/ProjectBar";
 import TemplatePicker from "./components/TemplatePicker";
 import Workbench from "./components/Workbench";
@@ -28,7 +29,6 @@ export default function App() {
   /** "Fill with structure" modal for the current project (issue 43). */
   const [showFill, setShowFill] = useState(false);
   const [showOpen, setShowOpen] = useState(false);
-  const [openPath, setOpenPath] = useState("");
   const [pdfVersion, setPdfVersion] = useState(0);
   const [pdfSync, setPdfSync] = useState<SyncRequest | null>(null);
   const [editorGoto, setEditorGoto] = useState<SyncRequest | null>(null);
@@ -236,37 +236,19 @@ export default function App() {
     }
   };
 
+  // Open-project flow (issue 47): one modal on every platform, with folder
+  // autocomplete. Errors are shown inline in the modal, so this rethrows.
   const doOpenProject = async (path: string) => {
-    try {
-      const p = await api.openProject(path);
-      setProject(p);
-      setExplorerStale(true); // tree may be stale until a full reload (issue 41)
-      dispatch({ type: "resetTabs" });
-      openDefaultTabs();
-      void refreshRecent();
-    } catch (e) {
-      setBanner(errMsg(e));
-    }
-  };
-
-  // Electron: native OS folder dialog. Browser (primary dev surface): inline
-  // modal with a path input — no window.prompt.
-  const openFolder = async () => {
-    if (window.workbench?.openFolderDialog) {
-      const path = await window.workbench.openFolderDialog();
-      if (path) void doOpenProject(path);
-    } else {
-      setOpenPath("");
-      setShowOpen(true);
-    }
-  };
-
-  const submitOpen = () => {
-    const p = openPath.trim();
-    if (!p) return;
+    const p = await api.openProject(path);
+    setProject(p);
+    setExplorerStale(true); // tree may be stale until a full reload (issue 41)
+    dispatch({ type: "resetTabs" });
+    openDefaultTabs();
     setShowOpen(false);
-    void doOpenProject(p);
+    void refreshRecent();
   };
+
+  const openFolder = () => setShowOpen(true);
 
   const createNew = async () => {
     const name = newName.trim();
@@ -758,32 +740,7 @@ export default function App() {
         </div>
       )}
       {showOpen && (
-        <div className="modal-backdrop" onClick={() => setShowOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="pane-header"><span>Open project</span></div>
-            <div className="modal-body">
-              <input
-                autoFocus
-                value={openPath}
-                onChange={(e) => setOpenPath(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submitOpen();
-                }}
-                placeholder="/home/nk/code/my-manuscript"
-              />
-              <div className="muted">
-                Absolute path to the project folder on this machine. Recent
-                projects are available in the top bar.
-              </div>
-              <div className="card-actions">
-                <button onClick={() => setShowOpen(false)}>Cancel</button>
-                <button className="primary" disabled={!openPath.trim()} onClick={submitOpen}>
-                  Open
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <OpenProjectModal onClose={() => setShowOpen(false)} onOpenProject={doOpenProject} />
       )}
       {showFill && project && (
         <FillStructureModal

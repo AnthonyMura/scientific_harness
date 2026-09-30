@@ -3,7 +3,7 @@
 // window pointed at the built web UI (served by the sidecar) or the Vite dev
 // server, and kills the sidecar on exit. See docs/workbench_v0_plan.md section 3.
 
-const { app, BrowserWindow, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
@@ -172,11 +172,8 @@ app.whenReady().then(() => {
 
 ipcMain.handle('workbench:config', () => ({ baseUrl, token: ACTIVE_TOKEN }));
 
-ipcMain.handle('dialog:openFolder', async () => {
-  const res = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
-  if (res.canceled || !res.filePaths.length) return null;
-  return res.filePaths[0];
-});
+// Open-project uses the web path-input modal with folder autocomplete on every
+// platform (issue 47) — there is no native OS folder dialog anymore.
 
 app.on('before-quit', (e) => {
   if (!app.isQuitting) {
