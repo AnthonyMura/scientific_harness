@@ -64,6 +64,39 @@ def _identity_args(root: Path) -> list[str]:
     return ["-c", "user.name=Workbench", "-c", "user.email=workbench@localhost"]
 
 
+# Default ignore set for projects initialized through the Git module (issue 56):
+# app state, milestone PDFs and LaTeX build artifacts — the folders/files that
+# otherwise flood the Changes list. Mirrors templates/manuscript/.gitignore.
+DEFAULT_GITIGNORE = """\
+# Default workbench project ignores — written by the Git module on repository init (issue 56).
+# Edit or delete freely; an existing .gitignore is never overwritten.
+
+# App state + compile artifacts
+.workbench/
+# Milestone PDFs saved from the PDF pane ("Save version")
+versions/*.pdf
+# LaTeX build artifacts
+*.aux *.log *.out *.fls *.toc *.synctex.gz *.fdb_latexmk *.bbl *.blg *.lof *.lot *.nav *.snm
+"""
+
+
+def write_default_gitignore(root: Path) -> bool:
+    """Create root/.gitignore with the workbench defaults when none exists.
+
+    Returns True when a file was written, False when one already existed (or
+    writing failed). Never overwrites an existing .gitignore; never raises —
+    init must succeed even if the write fails (e.g. read-only share).
+    """
+    target = root / ".gitignore"
+    try:
+        if target.exists():
+            return False
+        target.write_text(DEFAULT_GITIGNORE, encoding="utf-8")
+        return True
+    except OSError:
+        return False
+
+
 def repo_status(root: Path) -> dict:
     """{repo, initialized}: is root inside a git work tree, does it have >= 1 commit?"""
     rc, out = _git(root, "rev-parse", "--is-inside-work-tree")
@@ -89,6 +122,7 @@ def init_and_commit(root: Path, message: str) -> dict:
                 "repo": False, "initialized": False, "committed": False,
                 "detail": out or "git init failed",
             }
+    write_default_gitignore(root)  # issue 56: default ignores land in the baseline commit
     _git(root, "add", "-A")
     rc, out = _git(root, *(_identity_args(root)), "commit", "-m", message)
     if rc == 0:
@@ -117,6 +151,7 @@ def init_only(root: Path) -> dict:
         if rc != 0:
             return {"repo": False, "initialized": False, "committed": False,
                     "detail": out or "git init failed"}
+    write_default_gitignore(root)  # issue 56: shows as an untracked change until first commit
     st = repo_status(root)
     return {"repo": st["repo"], "initialized": st["initialized"], "committed": False, "detail": ""}
 
