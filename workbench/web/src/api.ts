@@ -64,6 +64,9 @@ export const api = {
   newProject: (name: string, location?: string, template?: string) =>
     request<Project>("POST", "/api/projects/new", { name, location, template }),
   recentProjects: () => request<{ projects: Project[] }>("GET", "/api/projects/recent"),
+  /** Remove one entry from the recent-projects list (issue 45). */
+  removeRecentProject: (id: string) =>
+    request<{ projects: Project[] }>("POST", "/api/projects/recent/remove", { id }),
   currentProject: () => request<{ project: Project | null }>("GET", "/api/project/current"),
   /** Built-in project templates for the new-project picker (issue 43). */
   templates: () => request<{ templates: Template[] }>("GET", "/api/templates"),
