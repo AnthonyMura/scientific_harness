@@ -229,8 +229,15 @@ export const MinusIcon = (p: IconProps) => (
     <line x1="5" y1="12" x2="19" y2="12" />
   </Svg>
 );
+export const ImageIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </Svg>
+);
 
-export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
+export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp", ".tif", ".tiff"];
 
 /** True for file names with a known image extension (tree thumbnails, M3). */
 export function isImageName(name: string): boolean {
