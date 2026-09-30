@@ -1,6 +1,7 @@
 # 45 — Remove an entry from recent projects (per-item control in the picker)
 
-Status: needs-triage
+Status: resolved (2026-09-30)
+Module: app-shell
 
 ## Request (user)
 
@@ -41,13 +42,43 @@ the affordance sitting at the right end of the item's name.
 - **API client**: add the method next to `recentProjects()` in `web/src/api.ts`
   (line ~66).
 
-## Open design questions
+## Open design questions (decided at claim time)
 
-- Remove control for the currently open project: hide it, or allow removal and
-  accept that the next open re-adds it?
-- Native `<select>` replacement vs. keeping the select and adding a separate
-  "manage recents" affordance — the per-name × only works with a custom menu.
-- Cap/eviction note in the UI (e.g. tooltip "keeps the last 20")?
+- Remove control for the currently open project: **hidden** (the default
+  proposal). Its re-insertion on every `open_project` call would make removal
+  feel broken; the row is still there and picking it is a no-op.
+- Native `<select>` replacement vs. separate "manage recents": **custom
+  dropdown** (button + anchored menu, same pattern as `ProjectSettingsMenu`).
+  The per-name × only works with a custom menu.
+- Cap/eviction note: **trigger tooltip** reads "Recent projects (keeps the
+  last 20)".
+
+## Verification plan (executed 2026-09-30)
+
+CDP suite over headless Chrome (`--headless=new`, `Input.dispatchMouseEvent`
+for real hover/click, `Runtime.evaluate` probes) against the Vite dev server
+:5199 + sidecar :8765. Seeded state with two scratch projects plus
+`test-latex-project` (opened last, so it is the current project); original
+`state.json` backed up and restored afterwards.
+
+All 16 checks passed:
+- app boots with the seeded current project; trigger opens the dropdown;
+  picker lists all three seeded entries in order.
+- × control **absent** on the current project's row.
+- hovering a row reveals its × (computed opacity 0 → 1); an unhovered row's ×
+  stays hidden (opacity 0).
+- clicking × removes exactly that entry — the other rows remain, the menu
+  stays open; the removed project's folder is untouched on disk.
+- picking a remaining entry opens it (top bar name updates), the menu closes,
+  and the picked entry re-enters at the front of the list (its × now hidden,
+  since it is current).
+- **restart persistence**: killed and relaunched the sidecar; after a page
+  reload the removed entry is still gone and the remaining entries survive.
+
+Note: port :9333 was already bound by a leftover headless Chrome from the
+issue-43 session, so the suite drove that existing instance instead of a fresh
+profile (same app + sidecar; only the browser profile differed). No check
+depends on localStorage, so results are unaffected.
 
 ## Related
 
@@ -55,14 +86,18 @@ the affordance sitting at the right end of the item's name.
 - `ProjectBar.tsx` / `App.tsx` — picker + recents state
 - `projects.py` `open_project()` — re-inserts into `recent_projects[:20]`
 
-## Verification plan
-
-TBD at claim time: CDP checks that opening two projects shows both in the
-picker, hovering a row reveals the × control, clicking it removes exactly that
-row (folder still on disk), the removal survives a sidecar restart, and picking
-a remaining entry still opens it.
-
 ## Comments
 
 New ticket (2026-09-30); idea from user: per-entry remove in the recent
 projects picker, control at the right of each name.
+
+Resolved 2026-09-30: custom dropdown replaces the native `<select>` (button +
+anchored menu, `ProjectSettingsMenu` pattern); rows carry a hover-revealed ×
+(always visible on touch) that calls `POST /api/projects/recent/remove {id}` —
+POST variant chosen because every other route is GET/POST/PUT and ids are
+absolute paths full of slashes. Backend `projects.remove_recent()` filters the
+list by id, 404s on a miss, persists via `st.set`; `App.tsx` syncs `recent`
+from the returned list (no refetch) and mirrors the backend's re-insert-at-front
+in `pickRecent`. Typecheck + production build clean; 16-check CDP suite green
+including restart persistence (see Verification plan). The user's real recents
+were backed up before seeding and restored afterwards.
