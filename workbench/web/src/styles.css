@@ -1529,6 +1529,7 @@ button.recent-name:hover { background: transparent; }
 .git-badge.r { color: var(--pearl); }
 .git-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-file-dir { flex: none; max-width: 40%; overflow: hidden; text-overflow: ellipsis; font-size: 10.5px; margin-left: auto; padding-right: 2px; }
+.git-file svg.ic { flex: none; margin-right: 5px; } /* issue 56: entry icon before the badge */
 
 /* commit box */
 .git-commit-box { border-top: 1px solid var(--hairline); padding: 8px 10px 10px; background: var(--bg-pane); }

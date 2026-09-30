@@ -33,6 +33,7 @@ import {
   PlusIcon,
   RefreshIcon,
   TrashIcon,
+  entryIcon,
 } from "../icons";
 
 export const GIT_SETTINGS: SettingControl[] = [
@@ -62,6 +63,19 @@ function baseName(p: string): string {
 function parentDir(p: string): string {
   const i = p.lastIndexOf("/");
   return i >= 0 ? p.slice(0, i) : "";
+}
+
+/** Porcelain v2 reports an untracked directory as one entry with a trailing slash (`?? versions/`). */
+export function isDirPath(p: string): boolean {
+  return p.endsWith("/");
+}
+
+/** Primary name + muted parent dir for a status row (issue 56). Directory entries
+ *  (trailing slash) get the folder name as primary — `baseName("versions/")` is "" —
+ *  and files keep the plain baseName/parentDir split. */
+export function entryDisplay(p: string): { name: string; dir: string; isDir: boolean } {
+  const norm = p.replace(/\/+$/, "");
+  return { name: baseName(norm), dir: parentDir(norm), isDir: isDirPath(p) };
 }
 
 function errMsg(e: unknown): string {
@@ -482,12 +496,18 @@ export default function GitPane({ ctx }: { ctx: AppCtx }) {
 
   const renderFileRow = (entry: GitFileEntry, staged: boolean) => {
     const diffOpen = wtDiffFile === entry.path;
+    const d = entryDisplay(entry.path);
     return (
       <React.Fragment key={entry.path + (staged ? ":s" : ":c")}>
-        <div className="tree-row git-file" title={entry.path} onClick={() => ctx.onOpenFile(entry.path)}>
+        <div
+          className="tree-row git-file"
+          title={entry.path}
+          onClick={() => { if (!d.isDir) ctx.onOpenFile(entry.path); }}
+        >
+          {entryIcon(d.name, d.isDir, false)}
           <span className={"git-badge " + entry.badge.toLowerCase()}>{entry.badge}</span>
-          <span className="git-file-name">{baseName(entry.path)}</span>
-          {parentDir(entry.path) && <span className="git-file-dir muted">{parentDir(entry.path)}</span>}
+          <span className="git-file-name">{d.name}</span>
+          {d.dir && <span className="git-file-dir muted">{d.dir}</span>}
           <span className="row-actions">
             {staged ? (
               <button type="button" title="Unstage" onClick={stop(() => unstage([entry.path]))}>
@@ -508,12 +528,16 @@ export default function GitPane({ ctx }: { ctx: AppCtx }) {
                 <TrashIcon size={13} />
               </button>
             )}
-            <button type="button" title="Open diff (HEAD vs worktree)" onClick={stop(() => setWtDiffFile(diffOpen ? null : entry.path))}>
-              <CodeIcon size={13} />
-            </button>
-            <button type="button" title="Open in editor" onClick={stop(() => ctx.onOpenFile(entry.path))}>
-              <PencilIcon size={13} />
-            </button>
+            {!d.isDir && (
+              <>
+                <button type="button" title="Open diff (HEAD vs worktree)" onClick={stop(() => setWtDiffFile(diffOpen ? null : entry.path))}>
+                  <CodeIcon size={13} />
+                </button>
+                <button type="button" title="Open in editor" onClick={stop(() => ctx.onOpenFile(entry.path))}>
+                  <PencilIcon size={13} />
+                </button>
+              </>
+            )}
           </span>
         </div>
         {diffOpen && <DiffView kind="worktree" file={entry.path} />}
