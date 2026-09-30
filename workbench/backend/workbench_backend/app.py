@@ -90,6 +90,10 @@ def create_app(token: str) -> FastAPI:
     def projects_recent():
         return {"projects": projects.recent(st)}
 
+    @app.post("/api/projects/recent/remove")
+    def projects_recent_remove(body: dict):
+        return {"projects": projects.remove_recent(st, _body_str(body, "id"))}
+
     @app.get("/api/project/current")
     def project_current():
         return {"project": projects.current(st)}

@@ -238,6 +238,20 @@ def recent(st) -> list[dict]:
     return st.get("recent_projects", [])
 
 
+def remove_recent(st, project_id: str) -> list[dict]:
+    """Remove one entry from the recent-projects list (issue 45).
+
+    History-only edit: the project folder on disk is untouched. Returns the
+    updated list so the client can sync its copy without a full refetch.
+    """
+    recents = st.get("recent_projects", [])
+    remaining = [r for r in recents if r.get("id") != project_id]
+    if len(remaining) == len(recents):
+        raise ApiError(404, f"not in recent projects: {project_id}")
+    st.set("recent_projects", remaining)
+    return remaining
+
+
 def current(st):
     pid = st.get("current_project")
     if not pid:
