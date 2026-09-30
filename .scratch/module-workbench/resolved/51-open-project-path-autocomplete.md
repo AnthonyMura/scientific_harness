@@ -1,7 +1,9 @@
-# 47 — Open project: unified path modal with folder autocomplete
+# 51 — Open project: unified path modal with folder autocomplete
 
 Status: resolved
 Module: app-shell (Open… flow), backend (fs listing)
+Note: renumbered 47 → 51 (2026-10) — #47 was concurrently taken by the home
+machine's open ticket `issues/47-tinytex-language-support.md`.
 
 ## Request (user, 2026-10)
 
