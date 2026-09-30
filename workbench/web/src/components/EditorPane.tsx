@@ -19,6 +19,7 @@ import { labelIndex } from "../labelIndex";
 import { vesperHighlight } from "../vesperTheme";
 import { api } from "../api";
 import type { AppCtx } from "../modules/ctx";
+import { emitFileWritten } from "../modules/events";
 import { useModuleSettings } from "../modules/settings";
 import type { ModuleSettings, SettingControl } from "../modules/settings";
 import SettingsMenu from "./SettingsMenu";
@@ -196,6 +197,8 @@ export default function EditorPane({ ctx, filePath }: Props) {
         const op = writeChain.then(() =>
           api.writeFile(filePath, content).then(
             () => {
+              // File is on disk now — let on-disk watchers (Git status) react.
+              emitFileWritten(filePath);
               // Only clear the dirty dot if the doc has not moved on mid-write.
               if (v.state.doc.toString() === content) {
                 setDirty(false);
