@@ -1,4 +1,4 @@
-# 52 — Pinned tabs: keep a tab (e.g. the .tex section) fixed at the front of its strip
+# 54 — Pinned tabs: keep a tab (e.g. the .tex section) fixed at the front of its strip
 
 Status: needs-triage
 Machine: home
@@ -12,7 +12,7 @@ this option"
 ## Current state
 
 - No pin concept: `Tab` (`workbench/web/src/modules/layout.ts:12–17`) carries
-  only id / moduleId / title / params, and strip order is open order (see #51).
+  only id / moduleId / title / params, and strip order is open order (see #53).
   The right-click `TabMenu` (Workbench.tsx:546) offers only "Close".
 - A user juggling one main .tex section with many note files has no way to keep
   the section tab first while notes open and close around it.
@@ -22,7 +22,7 @@ this option"
 1. Pin / unpin a tab from the right-click `TabMenu` (and/or a pin affordance on
    the tab itself); pinned state persists with the layout.
 2. Pinned tabs render at the front of their pane's strip, before all unpinned
-   tabs; within each section order is unchanged (open order / #51 moves).
+   tabs; within each section order is unchanged (open order / #53 moves).
 3. Visual distinction for pinned tabs (pin icon, tighter title), PyCharm-style:
    the tab stays first while other tabs open, close and reorder around it.
 
@@ -36,7 +36,7 @@ this option"
   options: sort pinned-first at render time (less invasive) or keep the stored
   order pinned-first by reordering in the reducer (honest for drop-index math);
   decide at claim time.
-- Interaction with #51 moves: moving a pinned tab into the unpinned region (or
+- Interaction with #53 moves: moving a pinned tab into the unpinned region (or
   vice versa) should either unpin it or keep pinning by position — decide at
   claim time.
 
@@ -49,7 +49,7 @@ this option"
 
 ## Related
 
-- #51 — Tab reorder (same strip UI; likely one branch)
+- #53 — Tab reorder (same strip UI; likely one branch)
 - `workbench/web/src/modules/layout.ts` — Tab type, reducer, persistence
 - `workbench/web/src/components/Workbench.tsx` — TabView / TabMenu
 

@@ -1,4 +1,4 @@
-# 51 — Tab reorder: move a tab within its strip without splitting
+# 53 — Tab reorder: move a tab within its strip without splitting
 
 Status: needs-triage
 Machine: home
@@ -53,7 +53,7 @@ Needs to move."
 
 ## Related
 
-- #52 — Pinned tabs (same strip UI; likely one branch)
+- #54 — Pinned tabs (same strip UI; likely one branch)
 - `workbench/web/src/components/Workbench.tsx` — TabView / TabMenu / drop logic
 - `workbench/web/src/modules/layout.ts` — reducer + persistence
 
