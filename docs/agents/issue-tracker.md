@@ -11,9 +11,35 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 - Triage state is recorded as a `Status:` line near the top of each issue file (see `triage-labels.md` for the role strings)
 - Comments and conversation history append to the bottom of the file under a `## Comments` heading
 
+## Machine flag
+
+Every open ticket carries a `Machine:` line right after its `Status:` line,
+recording where the ticket's work was developed and verified:
+
+- `home` — the home dev machine (this repo's WSL Ubuntu setup)
+- `lab` — an office/lab machine (see docs/INSTALL.md)
+
+The flag guards against mismatches between machines (TeX availability, Node
+version, display). New tickets are stamped with the machine they are written
+on. When a ticket is picked up or re-verified on a different machine than the
+one flagged, re-run its verification plan before trusting the results.
+
 ## When a skill says "publish to the issue tracker"
 
 Create a new file under `.scratch/<feature-slug>/` (creating the directory if needed).
+
+## Machine flag
+
+Every open ticket carries a `Machine:` line right after its `Status:` line,
+recording where the ticket's work was developed and verified:
+
+- `home` — the home dev machine (this repo's WSL Ubuntu setup)
+- `lab` — an office/lab machine (see docs/INSTALL.md)
+
+The flag guards against mismatches between machines (TeX availability, Node
+version, display). New tickets are stamped with the machine they are written
+on. When a ticket is picked up or re-verified on a different machine than the
+one flagged, re-run its verification plan before trusting the results.
 
 ## When a skill says "fetch the relevant ticket"
 
