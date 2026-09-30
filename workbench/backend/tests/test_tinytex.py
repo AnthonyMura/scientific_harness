@@ -88,13 +88,26 @@ CASCADE_LOG = (
 def _install_env(monkeypatch, present=(), pkgs=()):
     monkeypatch.setattr(tinytex, "find_prefix", lambda: Path("/fake/prefix"))
     monkeypatch.setattr(tinytex, "bin_dir", lambda p: Path("/fake/bin"))
-    monkeypatch.setattr(tinytex, "_file_present", lambda b, f: f in present)
+    files = set(present)
+
+    def file_present(b, f):
+        return f in files
+
+    monkeypatch.setattr(tinytex, "_file_present", file_present)
     monkeypatch.setattr(tinytex, "_pkg_installed", lambda b, pkg: pkg in pkgs)
     monkeypatch.setattr(tinytex, "_run", FakeRun())
     names = []
+    # A successful install materializes the files its package provides - a
+    # healthy mirror. Partial-mirror tests override _tlmgr_install/_file_present.
+    PKG_FILES = {
+        "ragged2e": ("ragged2e.sty",),
+        "cyrillic": ("t2aenc.def",),
+        "lh": ("larm1000.mf", "lasx1000.mf"),
+    }
 
-    def fake_install(b, pkg, job=None):
+    def fake_install(b, pkg, job=None, repository=None):
         names.append(pkg)
+        files.update(PKG_FILES.get(pkg, ()))
         return True
 
     monkeypatch.setattr(tinytex, "_tlmgr_install", fake_install)
@@ -214,7 +227,7 @@ def test_unfixable_document_stops_after_first_attempt(monkeypatch, tmp_path):
 def test_failed_install_not_retried_within_same_job(monkeypatch):
     job, _names = _install_env(monkeypatch)
     attempts = []
-    def flaky(b, pkg, job=None):
+    def flaky(b, pkg, job=None, repository=None):
         attempts.append(pkg)
         return pkg != "cyrillic"
     monkeypatch.setattr(tinytex, "_tlmgr_install", flaky)
@@ -352,3 +365,56 @@ def test_pkg_for_file_mf_source_unknown_family_guesses(monkeypatch):
     fake = FakeRun()
     monkeypatch.setattr(tinytex, "_run", fake)
     assert tinytex._pkg_for_file(Path("/fake/bin"), "cmr10.mf") == "cmr10"
+
+
+# --- partial-mirror fallback (CTAN) -------------------------------------------
+
+
+def test_partial_mirror_triggers_ctan_fallback(monkeypatch):
+    # The primary mirror's build of `lh` is partial (X2 sources only, no T2A):
+    # the install succeeds but larm1000.mf never appears - retry once from the
+    # official CTAN repository, where the file does exist.
+    job, _ = _install_env(monkeypatch)
+    monkeypatch.setattr(tinytex, "_pkg_for_file", lambda b, f: "lh")
+    calls = []
+
+    def install(b, pkg, job=None, repository=None):
+        calls.append((pkg, repository))
+        return True
+
+    monkeypatch.setattr(tinytex, "_tlmgr_install", install)
+    checks = {"n": 0}
+
+    def present(b, f):
+        # The file only exists after the second (CTAN) install.
+        checks["n"] += 1
+        return checks["n"] >= 3
+
+    monkeypatch.setattr(tinytex, "_file_present", present)
+    log = "mktexpk: don't know how to create bitmap font for larm1000.\n"
+    installed = tinytex.maybe_install_missing(job, log)
+    assert calls == [("lh", None), ("lh", tinytex.FALLBACK_REPOSITORY)]
+    assert installed == ["lh"]
+    assert "retrying from" in job.text()
+
+
+def test_partial_mirror_fallback_failure_is_not_retried(monkeypatch):
+    # The CTAN retry also fails to produce the file: mark the package failed
+    # so later attempts in the same run skip it instead of re-installing forever.
+    job, _ = _install_env(monkeypatch)
+    monkeypatch.setattr(tinytex, "_pkg_for_file", lambda b, f: "lh")
+    calls = []
+
+    def install(b, pkg, job=None, repository=None):
+        calls.append((pkg, repository))
+        return True
+
+    monkeypatch.setattr(tinytex, "_tlmgr_install", install)
+    monkeypatch.setattr(tinytex, "_file_present", lambda b, f: False)
+    log = "mktexpk: don't know how to create bitmap font for larm1000.\n"
+    first = tinytex.maybe_install_missing(job, log)
+    assert calls == [("lh", None), ("lh", tinytex.FALLBACK_REPOSITORY)]
+    second = tinytex.maybe_install_missing(job, log)
+    assert second == []
+    assert len(calls) == 2  # no third install attempt
+    assert "failed earlier in this run" in job.text()

@@ -250,8 +250,24 @@ def _pkg_for_file(b: Path, fname: str) -> str | None:
     return base
 
 
-def _tlmgr_install(b: Path, pkg: str, job=None) -> bool:
-    rc, out = _run([str(b / "tlmgr"), "install", pkg], timeout=1800)
+# The primary mirror (tlnet.yihui.org) ships partial builds of some packages:
+# its `lh` tarball contains only X2 sources and no T2A Metafont sources at all,
+# so a T2A Cyrillic document can never be repaired from it. When an install
+# "succeeds" but the file still does not exist, retry once from here.
+FALLBACK_REPOSITORY = "https://mirror.ctan.org/systems/texlive/tlnet"
+
+
+def _tlmgr_install(b: Path, pkg: str, job=None, repository: str | None = None) -> bool:
+    cmd = [str(b / "tlmgr")]
+    if repository:
+        # Install from a different repository. If the package is already
+        # installed (partially, from the primary mirror), force a full
+        # re-extract over it.
+        cmd += ["--repository", repository]
+        if _pkg_installed(b, pkg):
+            cmd.append("--reinstall")
+    cmd += ["install", pkg]
+    rc, out = _run(cmd, timeout=1800)
     text = (out or "").strip()
     if job is not None and text:
         for ln in text.splitlines():
@@ -431,6 +447,14 @@ def maybe_install_missing(job, log_text: str) -> list[str]:
                     seen.add(hyp)
                     if _tlmgr_install(b, hyp, job):
                         installed.append(hyp)
+            elif not _file_present(b, f):
+                # The install "succeeded" but the file still does not exist:
+                # the primary mirror's build of this package is partial (e.g.
+                # tlnet.yihui.org's `lh` ships only X2 sources - no T2A).
+                # Retry once from the official CTAN repository.
+                job.log(f"{f} still missing after installing `{pkg}` - retrying from {FALLBACK_REPOSITORY}")
+                if not (_tlmgr_install(b, pkg, job, repository=FALLBACK_REPOSITORY) and _file_present(b, f)):
+                    failed.add(pkg)
         else:
             failed.add(pkg)
     # Missing GF->PK converters named by mktexpk; each ships as a tlmgr
