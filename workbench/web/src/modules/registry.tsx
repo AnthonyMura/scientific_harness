@@ -6,8 +6,9 @@ import type { AppCtx } from "./ctx";
 import type { Tab } from "./layout";
 import type { ModuleSettings, SettingControl } from "./settings";
 import type { IconProps } from "../icons";
-import { DownloadIcon, EyeIcon, FileTextIcon, FolderIcon, OutlineIcon, TerminalIcon } from "../icons";
+import { DownloadIcon, EyeIcon, FileTextIcon, FolderIcon, GitBranchIcon, OutlineIcon, TerminalIcon } from "../icons";
 import FileExplorer, { EXPLORER_DEFAULTS, EXPLORER_SETTINGS } from "../components/FileExplorer";
+import GitPane, { GIT_DEFAULTS, GIT_SETTINGS } from "../components/GitPane";
 import EditorPane, { EDITOR_DEFAULTS, EDITOR_SETTINGS } from "../components/EditorPane";
 import PdfViewer, { PDF_DEFAULTS, PDF_SETTINGS } from "../components/PdfViewer";
 import LogPanel, { LOG_DEFAULTS, LOG_SETTINGS } from "../components/LogPanel";
@@ -33,6 +34,12 @@ export const MODULES: Record<string, ModuleEntry> = {
     render: (ctx) => <StructurePane ctx={ctx} />,
     settings: STRUCTURE_SETTINGS,
     defaults: STRUCTURE_DEFAULTS,
+  },
+  git: {
+    icon: GitBranchIcon,
+    render: (ctx) => <GitPane ctx={ctx} />,
+    settings: GIT_SETTINGS,
+    defaults: GIT_DEFAULTS,
   },
   editor: {
     icon: FileTextIcon,
