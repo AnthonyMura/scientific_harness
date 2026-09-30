@@ -60,6 +60,15 @@ def create_app(token: str) -> FastAPI:
             raise ApiError(400, f"missing field: {key}")
         return v.strip()
 
+    def _body_list(body: dict, key: str) -> list[str]:
+        v = body.get(key)
+        if not isinstance(v, list):
+            raise ApiError(400, f"missing field: {key} (list of paths)")
+        out = [x for x in v if isinstance(x, str) and x.strip()]
+        if not out:
+            raise ApiError(400, f"missing field: {key} (non-empty list of paths)")
+        return out
+
     # --- meta -------------------------------------------------------------
     @app.get("/api/health")
     def health():
@@ -97,6 +106,12 @@ def create_app(token: str) -> FastAPI:
     @app.get("/api/project/current")
     def project_current():
         return {"project": projects.current(st)}
+
+    # One directory level of an arbitrary local path — Open-project path
+    # autocomplete (issue 47). Not confined to the current project on purpose.
+    @app.get("/api/fs/list")
+    def fs_list(path: str = ""):
+        return files.fs_list(path)
 
     # --- files ----------------------------------------------------------------
     @app.get("/api/files/tree")
@@ -284,7 +299,7 @@ def create_app(token: str) -> FastAPI:
         distro = body.get("distro") or None
         return {"job_id": install.start_install(st, jobs, target, distro)}
 
-    # --- git (minimal service for issue 43; the broader story is issue 42) ----
+    # --- git (issue 42: version-control module; issue 43 keeps init/commit) ----
     @app.post("/api/git/init")
     def git_init(body: dict):
         root = projects.root_of(st)
@@ -303,8 +318,62 @@ def create_app(token: str) -> FastAPI:
     def git_commit(body: dict):
         root = projects.root_of(st)
         message = _body_str(body, "message")
-        gitsvc.commit_all(root, message)
+        # Legacy issue-43 callers (fill flow) commit everything; the Git module
+        # passes all=false to commit the staged set.
+        all_ = body.get("all", True)
+        return gitsvc.commit(root, message, all=bool(all_))
+
+    @app.get("/api/git/status")
+    def git_status():
+        return gitsvc.workbench_status(projects.root_of(st))
+
+    @app.get("/api/git/log")
+    def git_log(limit: int = 50, skip: int = 0):
+        return gitsvc.log(projects.root_of(st), limit=limit, skip=skip)
+
+    @app.get("/api/git/commit-info")
+    def git_commit_info(sha: str):
+        return gitsvc.commit_info(projects.root_of(st), sha)
+
+    @app.get("/api/git/diff")
+    def git_diff(sha: str, file: str = ""):
+        if not file.strip():
+            raise ApiError(400, "missing field: file")
+        return gitsvc.file_diff(projects.root_of(st), sha, file)
+
+    @app.post("/api/git/stage")
+    def git_stage(body: dict):
+        gitsvc.stage(projects.root_of(st), _body_list(body, "paths"))
         return {"ok": True}
+
+    @app.post("/api/git/unstage")
+    def git_unstage(body: dict):
+        gitsvc.unstage(projects.root_of(st), _body_list(body, "paths"))
+        return {"ok": True}
+
+    @app.post("/api/git/discard")
+    def git_discard(body: dict):
+        gitsvc.discard(projects.root_of(st), _body_list(body, "paths"))
+        return {"ok": True}
+
+    @app.get("/api/git/branches")
+    def git_branches():
+        return gitsvc.branches(projects.root_of(st))
+
+    @app.post("/api/git/branch")
+    def git_branch(body: dict):
+        name = _body_str(body, "name")
+        return gitsvc.create_branch(projects.root_of(st), name)
+
+    @app.post("/api/git/switch")
+    def git_switch(body: dict):
+        name = _body_str(body, "name")
+        return gitsvc.switch_branch(projects.root_of(st), name)
+
+    @app.post("/api/git/checkout")
+    def git_checkout(body: dict):
+        sha = _body_str(body, "sha")
+        return gitsvc.checkout_commit(projects.root_of(st), sha)
 
     # --- built web UI (served same-origin with the API) ------------------------
     web_dist = Path(__file__).resolve().parent.parent.parent / "web" / "dist"

@@ -60,6 +60,42 @@ def tree(root: Path, rel_dir: str | None, show_hidden: bool = False) -> dict:
     return {"dir": rel_dir or "", "entries": entries}
 
 
+#: Safety cap for one fs listing (path autocomplete, issue 47): a single
+#: dropdown must not enumerate e.g. node_modules in full.
+FS_LIST_MAX_ENTRIES = 500
+
+
+def fs_list(raw_path: str) -> dict:
+    """One directory level of an arbitrary local path — Open-project autocomplete.
+
+    Unlike the /api/files/* routes this is not confined to the current project:
+    the Open… modal must browse any folder on the machine before a project is
+    chosen. The sidecar is 127.0.0.1-only and token-gated, and `open_project`
+    already accepts any absolute path, so listing directory names for the typed
+    prefix is within the same trust model. Paths are normalized through
+    projects._maybe_map exactly like open does (WSL UNC / drive-letter forms).
+    Empty path lists the home directory. Dotfiles stay hidden (explorer policy)
+    and the listing is capped so a huge dir cannot blow up the dropdown.
+    """
+    from . import projects as _projects  # local import: avoid a cycle at module load
+
+    p = _projects._maybe_map(raw_path) if raw_path.strip() else Path.home()
+    if not p.is_dir():
+        raise ApiError(404, f"not a directory: {raw_path or '~'}")
+    entries = []
+    for child in sorted(p.iterdir(), key=lambda q: (q.is_file(), q.name.lower())):
+        if child.name.startswith("."):
+            continue  # hide dotfiles (.git, .workbench, ...) like the explorer does
+        try:
+            child.stat()
+        except OSError:
+            continue
+        entries.append({"name": child.name, "is_dir": child.is_dir()})
+        if len(entries) >= FS_LIST_MAX_ENTRIES:
+            break
+    return {"path": str(p), "entries": entries, "truncated": len(entries) >= FS_LIST_MAX_ENTRIES}
+
+
 def read_file(root: Path, rel: str) -> dict:
     p = safe_path(root, rel)
     if not p.is_file():
