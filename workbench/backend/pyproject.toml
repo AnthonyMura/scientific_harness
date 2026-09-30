@@ -18,3 +18,8 @@ workbench-backend = "workbench_backend.__main__:main"
 
 [tool.setuptools]
 packages = ["workbench_backend"]
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
