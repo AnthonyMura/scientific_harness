@@ -198,6 +198,38 @@ export const CodeIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const GitBranchIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="6" y1="3" x2="6" y2="15" />
+    <circle cx="18" cy="6" r="3" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M18 9a9 9 0 0 1-9 9" />
+  </Svg>
+);
+export const GitCommitIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="3" />
+    <line x1="3" y1="12" x2="9" y2="12" />
+    <line x1="15" y1="12" x2="21" y2="12" />
+  </Svg>
+);
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 6 9 17l-5-5" />
+  </Svg>
+);
+export const PlusIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </Svg>
+);
+export const MinusIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </Svg>
+);
+
 export const IMAGE_EXTS = [".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".bmp"];
 
 /** True for file names with a known image extension (tree thumbnails, M3). */

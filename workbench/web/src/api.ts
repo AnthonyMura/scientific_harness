@@ -2,6 +2,11 @@ import type {
   ConfigResponse,
   FillResult,
   FsListResponse,
+  GitBranchesResponse,
+  GitCommitInfoResponse,
+  GitDiffResponse,
+  GitLogResponse,
+  GitStatusResponse,
   JobError,
   Project,
   TargetStatus,
@@ -82,14 +87,39 @@ export const api = {
   fillProject: (template: string, apply = false) =>
     request<FillResult>("POST", "/api/projects/fill", { template, apply }),
 
-  /** Initialize a git repository in the current project (issue 43). */
-  gitInit: (message?: string) =>
+  /** Initialize a git repository in the current project (issue 43).
+   *  commit=false → plain `git init`, no baseline commit (issue 42 empty state). */
+  gitInit: (message?: string, commit = true) =>
     request<{ git: { repo: boolean; initialized: boolean }; committed: boolean; detail: string }>(
-      "POST", "/api/git/init", { message },
+      "POST", "/api/git/init", { message, commit },
     ),
-  /** Commit all current changes in the project's repository. */
-  gitCommit: (message: string) =>
-    request<{ ok: boolean }>("POST", "/api/git/commit", { message }),
+  /** Commit the staged set (all=true stages everything first). Issue 42. */
+  gitCommit: (message: string, all = true) =>
+    request<{ ok: boolean }>("POST", "/api/git/commit", { message, all }),
+  /** Working-tree state for the Git module's Changes view (issue 42). */
+  gitStatus: () => request<GitStatusResponse>("GET", "/api/git/status"),
+  gitLog: (limit = 50, skip = 0) =>
+    request<GitLogResponse>("GET", `/api/git/log?limit=${limit}&skip=${skip}`),
+  gitCommitInfo: (sha: string) =>
+    request<GitCommitInfoResponse>("GET", `/api/git/commit-info?sha=${encodeURIComponent(sha)}`),
+  /** Unified diff of one file at one commit (vs. its parent). */
+  gitDiff: (sha: string, file: string) =>
+    request<GitDiffResponse>(
+      "GET",
+      `/api/git/diff?sha=${encodeURIComponent(sha)}&file=${encodeURIComponent(file)}`,
+    ),
+  /** Unified diff of one file between HEAD and the working tree. */
+  worktreeDiff: (file: string) =>
+    request<GitDiffResponse>("GET", `/api/git/worktree-diff?file=${encodeURIComponent(file)}`),
+  gitStage: (paths: string[]) => request<{ ok: boolean }>("POST", "/api/git/stage", { paths }),
+  gitUnstage: (paths: string[]) => request<{ ok: boolean }>("POST", "/api/git/unstage", { paths }),
+  /** Destructive: revert the working tree for these paths. */
+  gitDiscard: (paths: string[]) => request<{ ok: boolean }>("POST", "/api/git/discard", { paths }),
+  gitBranches: () => request<GitBranchesResponse>("GET", "/api/git/branches"),
+  gitCreateBranch: (name: string) => request<{ ok: boolean }>("POST", "/api/git/branch", { name }),
+  gitSwitch: (name: string) => request<{ ok: boolean }>("POST", "/api/git/switch", { name }),
+  /** Move HEAD to a commit (detached). */
+  gitCheckout: (sha: string) => request<{ ok: boolean }>("POST", "/api/git/checkout", { sha }),
 
   tree: (dir = "", hidden = false) =>
     request<TreeResponse>(
