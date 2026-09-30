@@ -35,6 +35,7 @@ export default function App() {
   const [banner, setBanner] = useState<string | null>(null);
   /** Static PDF open in the PDF pane (null = compiled main.pdf output). */
   const [pdfFile, setPdfFile] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<string | null>(null);
   /** Project .tex files for the compile picker and the main-file setting. */
   const [texFiles, setTexFiles] = useState<string[] | null>(null);
   /** Artifact names from the last successful compile (null = derive from the main file). */
@@ -588,6 +589,11 @@ export default function App() {
     dispatch({ type: "open", moduleId: "pdf" });
   }, []);
 
+  const onOpenImage = useCallback((path: string) => {
+    setImageFile(path);
+    dispatch({ type: "open", moduleId: "image" });
+  }, []);
+
   const onShowMainPdf = useCallback(() => {
     setPdfFile(null);
     dispatch({ type: "open", moduleId: "pdf" });
@@ -609,6 +615,7 @@ export default function App() {
       if (fp && gone(fp)) dispatch({ type: "close", tabId: t.id });
     }
     setPdfFile((cur) => (cur && gone(cur) ? null : cur)); // drop a deleted static PDF
+    setImageFile((cur) => (cur && gone(cur) ? null : cur)); // drop a deleted image
   }, []);
 
   const onFileRenamed = useCallback((oldPath: string, newPath: string) => {
@@ -651,6 +658,8 @@ export default function App() {
       project,
       pdfFile,
       onOpenPdf,
+      imageFile,
+      onOpenImage,
       onShowMainPdf,
       onCompile: () => void compile(),
       onCompileFile: (f) => void compile(false, f),
@@ -689,7 +698,7 @@ export default function App() {
       pdfGoto,
       gotoPdfPage,
     }),
-    [project, activeFile, editorFocused, pdfFocused, anyEditorOpen, pdfFile, onOpenPdf, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
+    [project, activeFile, editorFocused, pdfFocused, anyEditorOpen, pdfFile, imageFile, onOpenPdf, onOpenImage, onShowMainPdf, targetStatuses, onShowInstall, onShowLog,
      setAutoCompile, setTarget, saveSsh, setMainFile, texFiles, refreshTexFiles, pdfArtifact, treeTick, bumpTree, explorerStale, clearExplorerStale, onFillStructure,
      pdfVersion, job, onOpenFile, cancelJob, startInstall, onPathsGone, onFileRenamed,
      pdfSync, editorGoto, syncToPdf, syncToEditor, onFileSaved, registerEditorSave, registerEditorContent,

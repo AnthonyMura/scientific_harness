@@ -59,6 +59,10 @@ export interface AppCtx {
   pdfFile: string | null;
   /** Open a project PDF file read-only in the PDF pane. */
   onOpenPdf: (path: string) => void;
+  /** Project-relative path of an image shown in the Image pane (null = empty pane). */
+  imageFile: string | null;
+  /** Open a project image (PNG/JPG/TIFF, …) read-only in the Image pane. */
+  onOpenImage: (path: string) => void;
   /** Show the compiled main.pdf output in the PDF pane again. */
   onShowMainPdf: () => void;
   /** Start a manual compile of the project's main file. */
