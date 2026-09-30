@@ -1,6 +1,7 @@
 # 46 — Selection assist panel ("work with part of text") + word translation
 
 Status: needs-triage
+Machine: home
 
 **Design ticket.** The full panel concept below is for discussion with the
 author; the only part approved for immediate implementation is the first

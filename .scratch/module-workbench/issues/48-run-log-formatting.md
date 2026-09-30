@@ -1,6 +1,7 @@
 # 48 — Run log formatting: timing, coloured events, end-of-run error list
 
 Status: needs-triage
+Machine: home
 
 ## Request (user)
 

@@ -1,6 +1,7 @@
 # 01 — Project operating manual (AGENTS.md) for DSH agent work
 
 Status: needs-triage
+Machine: home
 
 **Draft vision for author review, not yet a development ticket.** Based on the
 shipped features of #43 (module-workbench, "Fill with structure") and the proven

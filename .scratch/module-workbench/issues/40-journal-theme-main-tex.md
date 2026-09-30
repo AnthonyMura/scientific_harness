@@ -1,6 +1,7 @@
 # 40 — Rewrite main.tex according to a chosen journal theme
 
 Status: needs-triage
+Machine: home
 
 **STOP before any implementation work: discuss the design with the author first.**
 The author is not yet sure this feature is worth building and plans to spend more

@@ -1,6 +1,7 @@
 # 47 — TinyTeX auto-install misses language/encoding packages (Russian T2A + babel)
 
 Status: needs-triage
+Machine: home
 
 ## Problem (user report)
 
