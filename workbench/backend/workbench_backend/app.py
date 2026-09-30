@@ -306,6 +306,14 @@ def create_app(token: str) -> FastAPI:
         st0 = gitsvc.repo_status(root)
         if st0["repo"] and st0["initialized"]:
             return {"git": st0, "committed": False, "detail": "already a repository with commits"}
+        if body.get("commit", True) is False:
+            # Issue 42 empty state: plain `git init`; the UI offers the first commit.
+            info = gitsvc.init_only(root)
+            return {
+                "git": {"repo": info["repo"], "initialized": info["initialized"]},
+                "committed": False,
+                "detail": info.get("detail", ""),
+            }
         message = (body.get("message") or "scaffold: initialize repository").strip()
         info = gitsvc.init_and_commit(root, message)
         return {
@@ -340,6 +348,12 @@ def create_app(token: str) -> FastAPI:
         if not file.strip():
             raise ApiError(400, "missing field: file")
         return gitsvc.file_diff(projects.root_of(st), sha, file)
+
+    @app.get("/api/git/worktree-diff")
+    def git_worktree_diff(file: str = ""):
+        if not file.strip():
+            raise ApiError(400, "missing field: file")
+        return gitsvc.worktree_diff(projects.root_of(st), file)
 
     @app.post("/api/git/stage")
     def git_stage(body: dict):

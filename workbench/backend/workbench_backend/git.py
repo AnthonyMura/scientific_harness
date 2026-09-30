@@ -38,6 +38,21 @@ def _git(root: Path, *args: str, timeout: int = 30) -> tuple[int | None, str]:
         return None, "git timed out"
 
 
+def _diff_only(root: Path, *args: str) -> tuple[int | None, str]:
+    """Like _git but stdout only — diff text must not be polluted by stderr
+    warnings (e.g. CRLF notes on WSL shares)."""
+    try:
+        p = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True, text=True, timeout=30,
+        )
+        return p.returncode, (p.stdout or "")
+    except FileNotFoundError:
+        return None, ""
+    except (subprocess.TimeoutExpired, OSError):
+        return None, "git timed out"
+
+
 def _identity_args(root: Path) -> list[str]:
     """-c user.name/-c user.email fallbacks when no identity is configured.
 
@@ -84,6 +99,26 @@ def init_and_commit(root: Path, message: str) -> dict:
         "repo": True, "initialized": False, "committed": False,
         "detail": out or "git commit failed",
     }
+
+
+def init_only(root: Path) -> dict:
+    """Plain `git init` (issue 42 empty state); no baseline commit.
+
+    The UI then offers making the first commit via the commit box.
+    Never raises; reports what happened.
+    """
+    if not git_available():
+        return {"repo": False, "initialized": False, "committed": False,
+                "detail": "git binary not found"}
+    rc, out = _git(root, "init", "-b", "main")
+    if rc != 0:
+        # Older git without `init -b`: plain init (default branch name kept).
+        rc, out = _git(root, "init")
+        if rc != 0:
+            return {"repo": False, "initialized": False, "committed": False,
+                    "detail": out or "git init failed"}
+    st = repo_status(root)
+    return {"repo": st["repo"], "initialized": st["initialized"], "committed": False, "detail": ""}
 
 
 def commit(root: Path, message: str, all: bool = False) -> dict:
@@ -154,7 +189,7 @@ def workbench_status(root: Path) -> dict:
     """
     base = {
         "git": git_available(), "repo": False, "initialized": False,
-        "branch": None, "detached": False, "upstream": None,
+        "branch": None, "detached": False, "head": None, "upstream": None,
         "ahead": 0, "behind": 0, "staged": [], "changes": [], "remotes": [],
     }
     if not git_available():
@@ -164,6 +199,11 @@ def workbench_status(root: Path) -> dict:
         return base
     base["repo"] = True
     base["initialized"] = _git(root, "rev-parse", "-q", "HEAD")[0] == 0
+    if base["initialized"]:
+        # Short sha of HEAD — shown in the header when detached.
+        rc, out = _git(root, "rev-parse", "--short", "HEAD")
+        if rc == 0 and out.strip():
+            base["head"] = out.strip()
 
     staged: list[dict] = []
     changes: list[dict] = []
@@ -188,14 +228,15 @@ def workbench_status(root: Path) -> dict:
             elif line.startswith("1 "):
                 # 1 XY <sub> <mH> <mI> <mode...> <hashes> <path> — XY is token 2,
                 # the path is always the last token (quoted if it has spaces).
+                # v2 uses "." as the "no change" placeholder where v1 uses a space.
                 tokens = line.split(" ")
                 if len(tokens) < 3:
                     continue
                 x, y = tokens[1][0], tokens[1][1]
                 path = _unquote_c(tokens[-1])
-                if x not in (" ", "?"):
+                if x not in (" ", ".", "?"):
                     staged.append({"path": path, "badge": x})
-                if y != " ":
+                if y not in (" ", "."):
                     changes.append({"path": path, "badge": y})
             elif line.startswith("2 "):
                 # 2 XY <sub> ... <mode> <object> <new>\t<old> (tab-separated paths);
@@ -207,9 +248,9 @@ def workbench_status(root: Path) -> dict:
                     continue
                 x, y = xy_tokens[0][0], xy_tokens[0][1]
                 path = _unquote_c(xy_tokens[-1])
-                if x not in (" ", "?"):
+                if x not in (" ", ".", "?"):
                     staged.append({"path": path, "badge": x})
-                if y != " ":
+                if y not in (" ", "."):
                     changes.append({"path": path, "badge": y})
             elif line.startswith("? "):
                 # Untracked: VS Code shows it under Changes; spec badge is A.
@@ -427,11 +468,57 @@ def file_diff(root: Path, sha: str, path: str) -> dict:
         if len(parts) >= 3 and (parts[0] == "-" or parts[1] == "-"):
             return {"file": path, "binary": True, "diff": ""}
 
-    rc, out = _git(root, "show", "--format=", sha, "--", path)
+    rc, out = _diff_only(root, "show", "--format=", sha, "--", path)
     if rc != 0:
         raise ApiError(500, out or "git show failed")
     if not out.strip():
         raise ApiError(404, f"no diff for {path} in this commit")
+    return {"file": path, "binary": False, "diff": out}
+
+
+def worktree_diff(root: Path, path: str) -> dict:
+    """Unified diff of one file between HEAD and the working tree (Changes view).
+
+    Untracked files have no entry at HEAD, so their full content is shown as
+    additions. Binary or missing files return the binary marker.
+    """
+    if not git_available():
+        raise ApiError(500, "git binary not found")
+    st = repo_status(root)
+    if not st["repo"]:
+        raise ApiError(409, "not a git repository")
+
+    rc, _ = _git(root, "cat-file", "-e", f"HEAD:{path}")
+    if rc != 0:
+        # Not in HEAD (untracked, or rename destination): show disk content.
+        target = root / path
+        if not target.is_file():
+            return {"file": path, "binary": True, "diff": ""}
+        try:
+            lines = target.read_text().splitlines()
+        except (UnicodeDecodeError, OSError):
+            return {"file": path, "binary": True, "diff": ""}
+        body = "".join("+" + line + "\n" for line in lines)
+        diff = f"--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(lines)} @@\n{body}"
+        return {"file": path, "binary": False, "diff": diff}
+
+    # Binary check via numstat restricted to the file.
+    rc, out = _git(root, "diff", "--numstat", "HEAD", "--", path)
+    if rc == 0:
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 3 and (parts[0] == "-" or parts[1] == "-"):
+                return {"file": path, "binary": True, "diff": ""}
+
+    rc, out = _diff_only(root, "diff", "HEAD", "--", path)
+    if rc != 0:
+        raise ApiError(500, out or "git diff failed")
+    if not out.strip():
+        # Worktree matches HEAD (e.g. staged-only change): fall back to the
+        # index-vs-HEAD view so something is shown.
+        rc, out = _diff_only(root, "diff", "--cached", "--", path)
+        if rc != 0:
+            raise ApiError(500, out or "git diff failed")
     return {"file": path, "binary": False, "diff": out}
 
 
@@ -452,6 +539,10 @@ def branches(root: Path) -> dict:
     for line in out.splitlines():
         name, _, mark = line.partition("\x00")
         if not name:
+            continue
+        # Detached HEAD: git emits a "(HEAD detached at <sha>)*" pseudo-entry;
+        # real refnames never contain "(", so skip it (and leave current=None).
+        if name.startswith("("):
             continue
         if mark.strip() == "*":
             current = name
