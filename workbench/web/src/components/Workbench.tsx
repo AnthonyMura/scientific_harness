@@ -10,7 +10,7 @@ import { FILE_DRAG_MIME, MODULE_DRAG_MIME, TAB_DRAG_MIME, findParent, layoutRedu
 import type { LayoutAction, LayoutState, Tab } from "../modules/layout";
 import { MODULE_DEFS, MODULE_ORDER } from "../modules/defs";
 import { MODULES } from "../modules/registry";
-import { DotsIcon, ExpandIcon, SplitDownIcon, SplitRightIcon, XIcon } from "../icons";
+import { DotsIcon, ExpandIcon, isImageName, SplitDownIcon, SplitRightIcon, XIcon } from "../icons";
 
 type DragState =
   | { kind: "tab"; tabId: string; fromGroup: string }
@@ -365,6 +365,7 @@ function GroupView({ id }: { id: string }) {
     if (file) {
       if (ctx.projectOpen) {
         if (/\.pdf$/i.test(file)) ctx.onOpenPdf(file); // PDFs land in the PDF pane
+        else if (isImageName(file)) ctx.onOpenImage(file); // images land in the Image pane
         else dispatch({ type: "open", moduleId: "editor", params: { filePath: file }, groupId: id });
       }
       setOver(null);

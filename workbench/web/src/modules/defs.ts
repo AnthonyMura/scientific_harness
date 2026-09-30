@@ -21,9 +21,10 @@ export const MODULE_DEFS: Record<string, ModuleDef> = {
     tabId: (p) => (p?.filePath ? `editor:${String(p.filePath)}` : "editor"),
   },
   pdf: { id: "pdf", title: "PDF Preview", slot: "panel", tabId: () => "pdf" },
+  image: { id: "image", title: "Image Preview", slot: "panel", tabId: () => "image" },
   log: { id: "log", title: "Run Log", slot: "panel", tabId: () => "log" },
   install: { id: "install", title: "Install TeX", slot: "panel", tabId: () => "install" },
 };
 
 /** Activity bar order. */
-export const MODULE_ORDER = ["explorer", "structure", "git", "editor", "pdf", "log", "install"];
+export const MODULE_ORDER = ["explorer", "structure", "git", "editor", "pdf", "image", "log", "install"];

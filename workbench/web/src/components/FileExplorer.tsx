@@ -279,6 +279,8 @@ export default function FileExplorer({ ctx }: Props) {
       toggle(e.path); // single click: select + expand/collapse folders
     } else if (/\.pdf$/i.test(e.name)) {
       ctx.onOpenPdf(e.path); // PDFs open read-only in the PDF pane
+    } else if (isImageName(e.name)) {
+      ctx.onOpenImage(e.path); // images open read-only in the Image pane
     } else if (ctx.editorFocused || !ctx.anyEditorOpen) {
       ctx.onOpenFile(e.path); // editor activated, or no editor open: a single click opens the file
     }
@@ -299,7 +301,7 @@ export default function FileExplorer({ ctx }: Props) {
             { label: "Delete", icon: <TrashIcon size={13} />, danger: true, action: () => setConfirmDelete({ path: menu.entry!.path, name: menu.entry!.name, isDir: true }) },
           ]
         : [
-            { label: "Open", icon: <PencilIcon size={13} />, action: () => ctx.onOpenFile(menu.entry!.path) },
+            { label: "Open", icon: <PencilIcon size={13} />, action: () => { const n = menu.entry!.name; if (/\.pdf$/i.test(n)) ctx.onOpenPdf(menu.entry!.path); else if (isImageName(n)) ctx.onOpenImage(menu.entry!.path); else ctx.onOpenFile(menu.entry!.path); } },
             { separator: true },
             { label: "Rename", icon: <PencilIcon size={13} />, action: () => startRename(menu.entry!) },
             { label: "Delete", icon: <TrashIcon size={13} />, danger: true, action: () => setConfirmDelete({ path: menu.entry!.path, name: menu.entry!.name, isDir: false }) },
@@ -358,7 +360,7 @@ export default function FileExplorer({ ctx }: Props) {
                 }
                 style={{ paddingLeft: 8 + depth * 14 }}
                 onClick={() => rowClick(e)}
-                onDoubleClick={() => { if (e.is_dir) return; if (/\.pdf$/i.test(e.name)) ctx.onOpenPdf(e.path); else ctx.onOpenFile(e.path); }}
+                onDoubleClick={() => { if (e.is_dir) return; if (/\.pdf$/i.test(e.name)) ctx.onOpenPdf(e.path); else if (isImageName(e.name)) ctx.onOpenImage(e.path); else ctx.onOpenFile(e.path); }}
                 draggable={!e.is_dir}
                 onDragStart={(ev) => {
                   if (e.is_dir) return;

@@ -6,11 +6,12 @@ import type { AppCtx } from "./ctx";
 import type { Tab } from "./layout";
 import type { ModuleSettings, SettingControl } from "./settings";
 import type { IconProps } from "../icons";
-import { DownloadIcon, EyeIcon, FileTextIcon, FolderIcon, GitBranchIcon, OutlineIcon, TerminalIcon } from "../icons";
+import { DownloadIcon, EyeIcon, FileTextIcon, FolderIcon, GitBranchIcon, ImageIcon, OutlineIcon, TerminalIcon } from "../icons";
 import FileExplorer, { EXPLORER_DEFAULTS, EXPLORER_SETTINGS } from "../components/FileExplorer";
 import GitPane, { GIT_DEFAULTS, GIT_SETTINGS } from "../components/GitPane";
 import EditorPane, { EDITOR_DEFAULTS, EDITOR_SETTINGS } from "../components/EditorPane";
 import PdfViewer, { PDF_DEFAULTS, PDF_SETTINGS } from "../components/PdfViewer";
+import ImageViewer, { IMAGE_DEFAULTS, IMAGE_SETTINGS } from "../components/ImageViewer";
 import LogPanel, { LOG_DEFAULTS, LOG_SETTINGS } from "../components/LogPanel";
 import InstallContent from "../components/InstallPanel";
 import StructurePane, { STRUCTURE_DEFAULTS, STRUCTURE_SETTINGS } from "../components/StructurePane";
@@ -54,6 +55,12 @@ export const MODULES: Record<string, ModuleEntry> = {
     render: (ctx) => <PdfViewer ctx={ctx} />,
     settings: PDF_SETTINGS,
     defaults: PDF_DEFAULTS,
+  },
+  image: {
+    icon: ImageIcon,
+    render: (ctx) => <ImageViewer ctx={ctx} />,
+    settings: IMAGE_SETTINGS,
+    defaults: IMAGE_DEFAULTS,
   },
   log: {
     icon: TerminalIcon,

@@ -248,7 +248,7 @@ input::placeholder { color: var(--text-3); }
 
 /* ---------- panes ------------------------------------------ */
 
-.pane, .editor-pane, .pdf-pane {
+.pane, .editor-pane, .pdf-pane, .image-pane {
   background: var(--bg-pane);
   border-right: 1px solid var(--hairline);
   min-width: 0;
@@ -260,6 +260,10 @@ input::placeholder { color: var(--text-3); }
 .pdf-pane {
   border-right: none;
   position: relative; /* anchor for the back pill (issue 26) */
+}
+.image-pane {
+  border-right: none;
+  position: relative;
 }
 
 .pane-header {
@@ -439,6 +443,27 @@ input::placeholder { color: var(--text-3); }
   margin: 0 auto 14px;
 }
 .pdf-page:last-child { margin-bottom: 0; }
+
+/* ---------- Image viewer ----------------------------------- */
+
+.image-host {
+  flex: 1;
+  min-height: 0;
+  overflow: auto; /* scrolls in both directions once the image outgrows the pane */
+  padding: 16px;
+}
+/* One wrapper, exactly image-sized (width: max-content): centered when narrow,
+   fully reachable by scrollbars when wide. */
+.image-wrap {
+  width: max-content;
+  margin: 0 auto;
+}
+.image-viewer-img {
+  display: block;
+  height: auto;
+  background: var(--bg-base); /* transparent PNGs read as a sheet, not the pane */
+  border-radius: 2px;
+}
 .pdf-page canvas {
   display: block;
   background: var(--pearl); /* the pearl page: brightest surface in the app */
