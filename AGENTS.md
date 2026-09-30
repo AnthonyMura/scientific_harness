@@ -49,13 +49,14 @@ Default vocabulary, label string equals role name. See `docs/agents/triage-label
 
 Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
-## Development rules (branch -> tests -> merge)
+## Development rules (ticket → branch → tests → merge)
 
 Standing rules for any agent doing implementation work in this repo:
 
-1. **Own branch per implementation task.** Before writing code, create a dedicated branch from an up-to-date `main`:
+1. **Ticket first, then own branch per implementation task.** Before writing code:
+   - Open the `.scratch/` ticket for the change — create it if missing, even if short; an implementation task without a ticket is not started (see Ticket trail).
    - Check freshness first (`git fetch && git status`; if behind, `git pull --rebase` — see Version control).
-   - Name it `<type>/<ticket-or-feature-slug>`, e.g. `fix/49-remove-install-tex-button`, `feat/zotero-sync`; use the `.scratch/` ticket number when one exists.
+   - Create a dedicated branch from the up-to-date `main`, named `<type>/<ticket-slug>`, e.g. `fix/49-remove-install-tex-button`, `feat/zotero-sync`.
    - Never commit implementation work directly on `main`. Exception: docs-only or ticket-only changes (no code, no test impact) may go straight to `main`, as routine commits already do.
 2. **Tests are part of the change.** Every implementation task ships tests for the behavior it adds or changes — a change without tests is not done:
    - Backend (Python): pytest, tests under `workbench/backend/tests/` (declared as the `dev` extra in pyproject.toml; on a fresh venv run `./.venv/bin/pip install pytest`). Run: `cd workbench/backend && ./.venv/bin/python -m pytest`.
@@ -63,10 +64,16 @@ Standing rules for any agent doing implementation work in this repo:
    - Tests must exercise the new/changed logic (not just import smoke); failing or skipped tests block the merge.
 3. **Merge gate.** An agent may merge its branch into `main` only when all hold:
    - full suite green: backend pytest + web vitest + typecheck/build,
+   - UI behavior changed → headless-Chrome CDP verification done (see Environment notes),
    - working tree clean, every change committed with a scoped message (one logical module per commit),
    - docs current per the standing request (README status line, plan progress note, AGENTS.md if the workflow changed).
-   Rebase onto a fresh `main` and merge with `git merge --ff-only`, then push. If tests fail, fix on the branch — never merge around failures; record the state in the ticket under `.scratch/` instead.
-4. **Ticket trail.** Link the branch to its `.scratch/` ticket; when the merge lands, move the ticket to `resolved/` (issue-tracker skill).
+   Rebase onto a fresh `main` and merge with `git merge --ff-only`, then push immediately (see Multi-machine workflow). If tests fail, fix on the branch — never merge around failures; record the state in the ticket under `.scratch/` instead.
+4. **Ticket trail.** The branch name carries the ticket number (`<type>/<ticket-slug>`); when the merge lands, move the ticket to `resolved/` (issue-tracker skill).
+
+5. **Multi-machine workflow (home ↔ lab).** Development continues across machines:
+   - Every session starts with `git fetch && git status`; if behind, `git pull --rebase` before any work.
+   - Push immediately after each merge so the other machine can pull right away; never end a session with merged-but-unpushed work.
+   - Each machine keeps its own `.venv` and `node_modules` (both gitignored — set up per docs/INSTALL.md); never commit local artifacts, and expect paths that exist on one machine to be absent on the other.
 
 ## Version control
 
