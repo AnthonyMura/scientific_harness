@@ -293,9 +293,25 @@ export default function App() {
     try {
       const opened = await api.openProject(p.root);
       setProject(opened);
+      // Mirror the backend's re-insert-at-front so the picker order stays in sync.
+      setRecent((prev) => {
+        const copy = prev.filter((r) => r.id !== opened.id);
+        copy.unshift(opened);
+        return copy.slice(0, 20);
+      });
       setExplorerStale(true); // tree may be stale until a full reload (issue 41)
       dispatch({ type: "resetTabs" });
       openDefaultTabs();
+    } catch (e) {
+      setBanner(errMsg(e));
+    }
+  };
+
+  /** Remove one entry from the recent-projects list (issue 45). The backend
+   *  returns the updated list, so no full refetch is needed. */
+  const removeRecent = async (p: Project) => {
+    try {
+      setRecent((await api.removeRecentProject(p.id)).projects);
     } catch (e) {
       setBanner(errMsg(e));
     }
@@ -708,6 +724,7 @@ export default function App() {
         onOpenFolder={() => void openFolder()}
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
+        onRemoveRecent={(p) => void removeRecent(p)}
         showInstall={false}
         onToggleInstall={() => dispatch({ type: "open", moduleId: "install" })}
       />

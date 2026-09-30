@@ -1,11 +1,11 @@
 // Top bar: project actions + project settings (Overleaf-style: main file,
 // compile target, auto-compile). The LaTeX Compile button itself lives in
 // the editor pane header while a .tex file is open.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Project } from "../types";
 import type { AppCtx } from "../modules/ctx";
 import ProjectSettingsMenu from "./ProjectSettingsMenu";
-import { GearIcon } from "../icons";
+import { ChevronDownIcon, GearIcon, XIcon } from "../icons";
 
 interface Props {
   project: Project | null;
@@ -15,34 +15,88 @@ interface Props {
   onOpenFolder: () => void;
   onNewProject: () => void;
   onPickRecent: (p: Project) => void;
+  onRemoveRecent: (p: Project) => void;
   showInstall: boolean;
   onToggleInstall: () => void;
 }
 
 export default function ProjectBar({
   project, recent, devMode, ctx,
-  onOpenFolder, onNewProject, onPickRecent,
+  onOpenFolder, onNewProject, onPickRecent, onRemoveRecent,
   showInstall, onToggleInstall,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState<{ x: number; y: number } | null>(null);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const recentRef = useRef<HTMLDivElement>(null);
+
+  // Close the recents dropdown on outside click / Escape (issue 45).
+  useEffect(() => {
+    if (!recentOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (recentRef.current && !recentRef.current.contains(e.target as Node)) setRecentOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setRecentOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [recentOpen]);
+
   return (
     <div className="topbar">
       <span className="brand">Scientific Harness</span>
       <button onClick={onOpenFolder}>Open…</button>
       <button onClick={onNewProject}>New…</button>
-      <select
-        value=""
-        onChange={(e) => {
-          const p = recent.find((r) => r.id === e.target.value);
-          if (p) onPickRecent(p);
-        }}
-        title="Recent projects"
-      >
-        <option value="">Recent…</option>
-        {recent.map((p) => (
-          <option key={p.id} value={p.id}>{p.name}</option>
-        ))}
-      </select>
+      <div className="recent-wrap" ref={recentRef}>
+        <button
+          type="button"
+          className={"recent-trigger" + (recentOpen ? " open" : "")}
+          title="Recent projects (keeps the last 20)"
+          aria-haspopup="menu"
+          aria-expanded={recentOpen}
+          onClick={() => setRecentOpen((v) => !v)}
+        >
+          Recent… <ChevronDownIcon size={12} />
+        </button>
+        {recentOpen && (
+          <div className="menu recent-menu" role="menu" aria-label="Recent projects">
+            {recent.length === 0 ? (
+              <div className="menu-empty">No recent projects</div>
+            ) : (
+              recent.map((p) => (
+                <div key={p.id} className="recent-row" title={p.root}>
+                  <button
+                    type="button"
+                    className="recent-name"
+                    onClick={() => {
+                      setRecentOpen(false);
+                      onPickRecent(p);
+                    }}
+                  >
+                    {p.name}
+                  </button>
+                  {/* The open project re-enters the list on every open, so it gets no ×. */}
+                  {(!project || p.id !== project.id) && (
+                    <button
+                      type="button"
+                      className="recent-x"
+                      title={`Remove ${p.name} from recent projects`}
+                      aria-label={`Remove ${p.name} from recent projects`}
+                      onClick={() => onRemoveRecent(p)}
+                    >
+                      <XIcon size={12} />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
       {project && (
         <>
           <span className="proj-name" title={project.root}>{project.name}</span>
