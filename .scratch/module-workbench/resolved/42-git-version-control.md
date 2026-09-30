@@ -1,6 +1,6 @@
 # 42 — Git module (version control: project state + history)
 
-Status: claimed
+Status: resolved
 Machine: home
 
 ## Request (user)
@@ -146,3 +146,85 @@ updates header + tree.
 New ticket (2026-09-29); description expanded per user request: "git version
 control history — shows history, the state of project; the same version
 control as vscode".
+
+Claimed (2026-10-01). Design decisions at claim time:
+
+- **Slot**: sidebar singleton next to Explorer/Structure (matches VS Code's SCM
+  placement and the #38 module pattern). History lives inside the module as a
+  second tab ("Changes" / "History"), not in the editor slot.
+- **Remotes**: names shown in the header context; fetch/push/pull are out of
+  v0 scope (local-only operations, per the open question).
+- **History**: linear list, newest first, bounded fetch (first 50 + load-more
+  via `skip`). No branch graph in v0. Per-file timeline: follow-up ticket.
+- **Checkout**: allow detached HEAD (`git switch --detach <sha>`) with a
+  confirm when leaving a branch or with a dirty tree — matches VS Code and the
+  "same as VS Code" ask; the confirm is the safety net for a writing app.
+- **Diff rendering**: dependency-free unified-diff parser/renderer inside the
+  module (hunk headers, +/- lines, context). Added lines use the Vesper sand
+  anchor, removed lines `--err` rose — no new color system. Binary files show
+  "Binary files differ".
+- **Refresh**: poll `GET /api/git/status` every ~3 s while a project with a
+  repo is open, plus an event-driven bump after in-app file writes (new
+  `onFileWritten` pub/sub emitted from the editor save chain — `onFileSaved`
+  is auto-compile-only and not reused). Polling per #32; no fs watching.
+- **Backend**: extends the minimal `git.py` from #43 in place (init/commit
+  kept for the FillStructureModal flow, which must keep working — commit
+  defaults to include-all when the field is absent). Porcelain v2 parsing was
+  verified empirically against this machine's git: type-1 lines carry mode/
+  hash fields before the path (path = last token), type-2 rename paths are
+  TAB-separated, and "no change" is `.` rather than a space. Commits always
+  use the `_identity_args` fallback so machines without a git identity can
+  still commit.
+
+Verification plan: backend smoke suite against a temp fixture repo (status
+badges incl. rename/untracked-dir, log refs + pagination + body round-trip,
+commit-info numstat incl. binary and rename `from`, file diff, stage/unstage/
+discard across all entry kinds, branch list/switch/create, detached checkout,
+non-repo degradation) — passing. Then CDP against the web app on a fixture
+project: UI state vs `git status --porcelain`, commit from UI, diff view vs
+`git show`, branch switch updates header + tree.
+
+## Resolution (September 2026)
+
+Shipped as a sidebar module ("Git", activity bar, next to Explorer):
+
+- **Backend** — `workbench_backend/git.py` extended in place: `workbench_status`
+  (porcelain v2 + `--branch`: staged/changes with M/A/D/R badges, untracked as
+  A, branch/detached/upstream/ahead-behind, remotes), `log(limit, skip)` with
+  refs and relative dates, `commit_info` (numstat incl. rename/binary),
+  `file_diff` / `worktree_diff` (untracked → synthesized full-add), `stage` /
+  `unstage` / `discard`, `branches` (skips git's `(HEAD detached at …)` pseudo-
+  line, which otherwise surfaces as a phantom branch), `switch_branch`
+  (show-ref verify; dirty refusal → 409 with git's message) and
+  `checkout_commit` (`git switch --detach`). Routes in `app.py`: POST
+  `init|commit|stage|unstage|discard|branch|switch|checkout`, GET
+  `status|log|commit-info|diff|worktree-diff|branches`. Issue-43 flow kept:
+  `POST /api/git/init` still does init + baseline commit by default; a new
+  `commit: false` body flag (used only by the Git module's empty state) runs
+  plain `git init` with no baseline commit, so the UI can offer making the
+  first commit via the commit box, per spec.
+- **Web** — `components/GitPane.tsx`: Changes view (branch header + detached
+  marker + short sha, ahead/behind chip, remotes; Staged/Changes groups with
+  hover row actions Stage / Unstage / Discard(confirm) / Open diff(HEAD vs
+  worktree) / open in editor), commit box (message + Commit staged set,
+  "include all changes" toggle default off, disabled while empty); History tab
+  (newest-first rows: short hash mono, author, relative date, refs badges,
+  expandable message; click → per-file numstat + unified diff, binary-aware;
+  Checkout with confirm; bounded 50 + load-more via `skip`); branch picker in
+  the header (local branches, switch with confirm on dirty, "New branch…",
+  remotes shown as labels — fetch/push/pull out of v0). Empty states:
+  not-a-repo → Initialize (+ first-commit offer after), missing git binary →
+  install hint. Refresh: ~3 s poll while a repo is open (per #32, no fs
+  watching) + `onFileWritten` bump emitted from the editor save chain
+  (`modules/events.ts`). Dependency-free unified-diff parser/renderer with
+  line-number gutter; removed lines use U+2212.
+- **Verified** — backend smoke suite against a fixture repo (passing); then
+  headless Chrome CDP end-to-end on a rebuilt fixture: 43/43 checks — status
+  vs `git status --porcelain`, untracked synthesized diff, staged-only diff vs
+  `git diff HEAD`, commit-detail numstat (+3 −1) and commit diff vs
+  `git show`, UI commit (include-all, disabled/enabled, subject + contents),
+  branch switch main→draft (header + tree + draft history), detached checkout
+  (short sha header, M/D unstaged rows, discard confirm + restore),
+  detached→main + branch create, new-branch flow, bounded 50 → load-more to
+  64 surviving a poll, and the not-a-repo empty state → plain init → first
+  commit from the UI on an unborn HEAD. `tsc --noEmit` + production build clean.
