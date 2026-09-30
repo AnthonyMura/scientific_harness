@@ -49,6 +49,25 @@ Default vocabulary, label string equals role name. See `docs/agents/triage-label
 
 Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
+## Development rules (branch -> tests -> merge)
+
+Standing rules for any agent doing implementation work in this repo:
+
+1. **Own branch per implementation task.** Before writing code, create a dedicated branch from an up-to-date `main`:
+   - Check freshness first (`git fetch && git status`; if behind, `git pull --rebase` — see Version control).
+   - Name it `<type>/<ticket-or-feature-slug>`, e.g. `fix/49-remove-install-tex-button`, `feat/zotero-sync`; use the `.scratch/` ticket number when one exists.
+   - Never commit implementation work directly on `main`. Exception: docs-only or ticket-only changes (no code, no test impact) may go straight to `main`, as routine commits already do.
+2. **Tests are part of the change.** Every implementation task ships tests for the behavior it adds or changes — a change without tests is not done:
+   - Backend (Python): pytest, tests under `workbench/backend/tests/` (create on first use; install into the venv with `./.venv/bin/pip install pytest`). Run: `cd workbench/backend && ./.venv/bin/python -m pytest`.
+   - Web (TypeScript): no unit-test runner is installed yet — the web gate is the build script (`tsc --noEmit && vite build`) plus headless-Chrome verification when UI behavior changed (see Environment notes). When a real test file lands under `workbench/web`, add vitest and a `test` script, then this bullet changes.
+   - Tests must exercise the new/changed logic (not just import smoke); failing or skipped tests block the merge.
+3. **Merge gate.** An agent may merge its branch into `main` only when all hold:
+   - full suite green: backend pytest + web typecheck/build,
+   - working tree clean, every change committed with a scoped message (one logical module per commit),
+   - docs current per the standing request (README status line, plan progress note, AGENTS.md if the workflow changed).
+   Rebase onto a fresh `main` and merge with `git merge --ff-only`, then push. If tests fail, fix on the branch — never merge around failures; record the state in the ticket under `.scratch/` instead.
+4. **Ticket trail.** Link the branch to its `.scratch/` ticket; when the merge lands, move the ticket to `resolved/` (issue-tracker skill).
+
 ## Version control
 
 - **Remote**: `origin` -> https://github.com/AnthonyMura/scientific_harness (public; clone and dev-mode setup documented in README)
