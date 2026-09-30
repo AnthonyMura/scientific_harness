@@ -1,6 +1,6 @@
 # 42 — Git module (version control: project state + history)
 
-Status: needs-triage
+Status: claimed
 Machine: home
 
 ## Request (user)
