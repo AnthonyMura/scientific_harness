@@ -1,6 +1,7 @@
 import type {
   ConfigResponse,
   FillResult,
+  FsListResponse,
   JobError,
   Project,
   TargetStatus,
@@ -61,6 +62,13 @@ export const api = {
   health: () => request<{ ok: boolean; version: string }>("GET", "/api/health"),
 
   openProject: (path: string) => request<Project>("POST", "/api/projects/open", { path }),
+  /** One directory level of an arbitrary local path for Open-project autocomplete
+   *  (issue 47). Empty path lists the home directory. */
+  fsList: (path = "") =>
+    request<FsListResponse>(
+      "GET",
+      `/api/fs/list?path=${encodeURIComponent(path)}`,
+    ),
   newProject: (name: string, location?: string, template?: string) =>
     request<Project>("POST", "/api/projects/new", { name, location, template }),
   recentProjects: () => request<{ projects: Project[] }>("GET", "/api/projects/recent"),

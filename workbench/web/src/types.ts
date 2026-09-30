@@ -59,6 +59,18 @@ export interface TreeResponse {
   entries: FileEntry[];
 }
 
+/** One directory level of an arbitrary local path — Open-project autocomplete (issue 47). */
+export interface FsEntry {
+  name: string;
+  is_dir: boolean;
+}
+
+export interface FsListResponse {
+  path: string;
+  entries: FsEntry[];
+  truncated: boolean;
+}
+
 export interface JobError {
   line: number | null;
   message: string;

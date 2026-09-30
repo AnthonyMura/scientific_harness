@@ -816,6 +816,44 @@ input::placeholder { color: var(--text-3); }
 .fill-done .tick { color: var(--ok); font-family: var(--font-mono); }
 .fill-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 
+/* open-project path autocomplete (issue 47) */
+.modal.open { width: 520px; }
+.path-suggest {
+  position: relative;
+  min-height: 0;
+}
+.path-suggest-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 80;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--bg-raised);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.path-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: var(--text-1);
+  white-space: nowrap;
+}
+/* Folders are the only openable targets — full opacity. Files stay visible
+   as context but dimmed (issue 47). */
+.path-suggest-row.file { opacity: 0.5; }
+.path-suggest-row.active,
+.path-suggest-row:hover { background: var(--bg-hover); }
+.path-suggest-row .name b { font-weight: 700; color: var(--gold-bright); }
+.path-suggest-empty { padding: 6px 10px; color: var(--text-3); font-size: 12px; }
+
 /* ---------- banner ----------------------------------------- */
 
 .banner {
