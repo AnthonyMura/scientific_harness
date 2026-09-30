@@ -133,8 +133,11 @@ class CompileService:
                     break
                 job.log(f"--- retrying compile after installing: {', '.join(installed)} ---")
                 try:
-                    # -f: latexmk otherwise keeps the cached error state and
-                    # refuses to rerun pdflatex for an unchanged input file.
+                    # Clear latexmk's state before the forced rerun: with the
+                    # stale fdb it reports "All targets up-to-date" and exits
+                    # without producing a PDF, so the repair would never be
+                    # exercised (issue 47 E2E). -f alone does not reprocess.
+                    clear_fdb()
                     proc = target.run_latexmk(root, main_file, build_dir, force=True)
                 except Exception as e:
                     job.log(f"failed to restart latexmk: {e}")
