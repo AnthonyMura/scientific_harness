@@ -1,6 +1,6 @@
 # 54 — Pinned tabs: keep a tab (e.g. the .tex section) fixed at the front of its strip
 
-Status: needs-triage
+Status: in-progress (claimed 2026-10-07, branch feat/54-pinned-tabs)
 Machine: home
 
 ## Request (user)
@@ -56,3 +56,33 @@ this option"
 ## Comments
 
 New ticket (2026-09-30); user request quoted above.
+
+Claimed 2026-10-07 on `feat/54-pinned-tabs` (from main @ 6c04c97). Decisions:
+
+- **Scope = PyCharm "pinned"**: front placement + compact visual distinction
+  only — no keep-alive / no-auto-close semantics. Pin is a per-tab property; the
+  ordering effect is per-pane strip (open questions resolved to the PyCharm
+  interpretation).
+- **Ordering mechanism: the reducer keeps the stored order pinned-first**
+  (contiguous-prefix invariant) rather than sorting at render time. Rationale:
+  drag-drop insert indices (Workbench.tsx onDragOver) and #53's menu moves are
+  both computed from rendered positions; with stored == rendered, all index math
+  stays honest without a render→stored mapping. New tabs append after the pinned
+  prefix (`open` inserts at list end).
+- **New action** `{ type: "pin"; tabId; pinned }` (single toggle): pinning
+  appends the tab to the end of the pinned section, unpinning drops it into the
+  first unpinned slot — one code path (re-insert at `boundary` = count of the
+  *other* pinned tabs in the group). Unpin moves the tab; recorded deviation
+  from PyCharm's keep-visual-position because contiguity keeps every index
+  computation honest.
+- **Move interaction (#53): crossing the boundary unpins.** A pinned tab moved
+  to an explicit `index >= boundary` loses its pin and lands there; an unpinned
+  tab moved to `index < boundary` clamps to the first unpinned slot (cannot
+  intrude on the pinned prefix — pinning happens only via the menu action).
+  Index-less moves of a pinned tab land at the target group's boundary and keep
+  the pin. All-unpinned groups reduce exactly to #53 behavior. Menu: "Move left
+  / Move to start" hide for an unpinned tab sitting at the first unpinned slot;
+  right/end unchanged.
+- **Persistence: no code change.** `tabs` is JSON-serialized wholesale in
+  `persistLayout`, so `pinned` flows through automatically; old layouts lack the
+  field → undefined → falsy → unpinned (no migration, per ticket).
