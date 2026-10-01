@@ -1,6 +1,6 @@
 # 53 — Tab reorder: move a tab within its strip without splitting
 
-Status: needs-triage
+Status: resolved (2026-10-01, home; commits 31abd21 + 4bdd44b)
 Machine: home
 
 ## Request (user)
@@ -61,3 +61,27 @@ Needs to move."
 
 New ticket (2026-09-30); user request quoted above.
 - Claimed 2026-10-01 on `feat/53-tab-reorder`. Keyboard-shortcut decision (open question 1): **menu-only** for this change. Alt+←/→ collide with browser back/forward navigation, which the page cannot reliably intercept, and tab elements are not focusable (plain divs, no tabIndex) so there is no "focused tab" to bind a shortcut to; drag-and-drop already covers fast reordering. Revisit if tabs become focusable (an a11y pass or #54 pinned tabs). Open question 2 (moving a tab to another pane from the menu): out of scope — cross-pane moves stay drag-only for v0.
+
+
+## Resolution (2026-10-01)
+
+Shipped on `feat/53-tab-reorder`, ff-merged to main (31abd21, 4bdd44b):
+
+- `module(workbench-shell)` — `TabMenu` (Workbench.tsx:547) computes the tab's
+  index in its group and adds four items: "Move tab left" / "Move tab right" /
+  "Move to start" / "Move to end", each dispatching the existing reducer action
+  `{ type: "move", tabId, groupId, index }` (layout.ts:342-360); items hide
+  themselves at the strip edges (`index > 0`, `index < tabs.length - 1`).
+  Drag-and-drop reorder is untouched; cross-pane moves stay drag-only.
+- `module(layout)` — new `workbench/web/src/modules/layout.test.ts` (7 tests):
+  move left/right keep the moved tab active, index clamping, three-tab
+  move-to-start/end, `lastEditor`/`focusedGroup` updates, cross-group move, and
+  a persist round-trip through `persistLayout`/`loadPersistedLayout`.
+
+Verified headless-Chrome CDP against the real app (test-latex-project): two
+editor tabs opened in order, "Move tab left" on the last tab swapped the strip
+to [appendix.tex, main.tex] with the moved tab staying active; menu items hide
+correctly at both edges (left/start only on the last tab, right/end only on the
+first); `localStorage` key `workbench.layout.v3` g-editor order matches the
+strip, and the swapped order survives a full page reload. Menu-only decision
+recorded under Comments (no keyboard shortcuts in v0).
