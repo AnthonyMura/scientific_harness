@@ -75,12 +75,18 @@ export default function ProjectSettingsMenu({ x, y, ctx, onClose }: Props) {
             onChange={(e) => ctx.onTarget(e.target.value)}
             title={targetTooltip(project.target, ctx.targetStatuses)}
           >
-            {!(COMPILE_TARGETS as readonly string[]).includes(project.target) && (
+            {project.target === "local" && (
+              <option value="local" disabled title={targetTooltip("local", ctx.targetStatuses)}>
+                Local (legacy — TinyTeX then system TeX)
+              </option>
+            )}
+            {!(COMPILE_TARGETS as readonly string[]).includes(project.target) && project.target !== "local" && (
               <option value={project.target} disabled>{project.target} — unavailable</option>
             )}
             <option value="auto">Auto</option>
-            <option value="local">Local (host TeX)</option>
-            {hasWslTarget(ctx.targetStatuses) && <option value="wsl">WSL</option>}
+            <option value="tinytex">In-app TinyTeX</option>
+            <option value="system">System TeX</option>
+            {hasWslTarget(ctx.targetStatuses) && <option value="wsl">WSL (Windows hosts)</option>}
             <option value="ssh">SSH (remote)</option>
           </select>
           {needsInstall(project.target, ctx.targetStatuses) && (

@@ -8,6 +8,13 @@ interface Props {
   ctx: AppCtx;
 }
 
+// Probe entry names are machine names ("tinytex", "system"); cards show a
+// friendlier label (issue 58). Everything else passes t.name through.
+const CARD_LABELS: Record<string, string> = {
+  tinytex: "In-app TinyTeX",
+  system: "System TeX (host)",
+};
+
 export default function InstallPanel({ ctx }: Props) {
   const [targets, setTargets] = useState<TargetStatus[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +51,7 @@ export default function InstallPanel({ ctx }: Props) {
             <div key={t.name} className={"card" + (t.tex_found && t.missing.length === 0 ? " ok" : "")}>
               <div className="card-title">
                 <span>
-                  {t.name}
+                  {CARD_LABELS[t.name] ?? t.name}
                   {t.recommended && <span className="chip rec" title="Installs into a hidden folder inside the app — no admin rights, only this app uses it">recommended</span>}
                 </span>
                 <span className={"chip " + (t.tex_found ? "done" : t.available ? "cancelled" : "error")}>
