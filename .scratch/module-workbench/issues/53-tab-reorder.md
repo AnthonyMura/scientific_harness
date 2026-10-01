@@ -60,3 +60,4 @@ Needs to move."
 ## Comments
 
 New ticket (2026-09-30); user request quoted above.
+- Claimed 2026-10-01 on `feat/53-tab-reorder`. Keyboard-shortcut decision (open question 1): **menu-only** for this change. Alt+←/→ collide with browser back/forward navigation, which the page cannot reliably intercept, and tab elements are not focusable (plain divs, no tabIndex) so there is no "focused tab" to bind a shortcut to; drag-and-drop already covers fast reordering. Revisit if tabs become focusable (an a11y pass or #54 pinned tabs). Open question 2 (moving a tab to another pane from the menu): out of scope — cross-pane moves stay drag-only for v0.
