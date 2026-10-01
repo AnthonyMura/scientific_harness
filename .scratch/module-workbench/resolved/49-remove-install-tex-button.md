@@ -1,6 +1,6 @@
 # 49 — Remove the "Install TeX" button from the top bar
 
-Status: needs-triage
+Status: resolved (2026-10-01, main; commit 242af7e app: remove Install TeX button from top bar)
 Machine: home
 
 ## Request (user)
