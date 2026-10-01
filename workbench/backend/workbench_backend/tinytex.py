@@ -237,6 +237,18 @@ def _pkg_for_file(b: Path, fname: str) -> str | None:
             s = ln.strip()
             if s.endswith(":") and " " not in s[:-1]:
                 return s[:-1]
+    # biblatex citation/bibliography styles: TL2026 ships each style as a
+    # per-style package `biblatex-<style>` (vancouver.bbx/.cbx ->
+    # biblatex-vancouver); pre-TL2026 trees carried the extras in one
+    # `biblatex-extra` package. The partial mirror's file index lacks these
+    # entries, so tlmgr search above returns nothing and the basename guess
+    # (`vancouver`) is not a package (issue 59: andrology E2E - the missing
+    # style aborted biblatex init and cascaded into bogus "Missing $" errors).
+    if fname.endswith((".bbx", ".cbx")):
+        for cand in (f"biblatex-{base}", "biblatex-extra"):
+            if _pkg_in_index(b, cand):
+                return cand
+        return f"biblatex-{base}"
     # Metafont sources: this mirror's file index is partial (lh and beamer
     # are absent from it), so resolve LH bitmap-font sources by font family.
     if fname.endswith(".mf"):

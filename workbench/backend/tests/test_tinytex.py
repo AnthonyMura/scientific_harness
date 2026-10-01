@@ -76,6 +76,37 @@ def test_pkg_for_file_fallbacks(monkeypatch):
     assert tinytex._pkg_for_file(Path("/fake/bin"), "somepkg.sty") == "somepkg"
 
 
+def test_pkg_for_file_biblatex_style_resolves_per_style_package(monkeypatch):
+    # TL2026 ships each citation style as a per-style package; the partial
+    # mirror's file index lacks the .bbx entry, so tlmgr search finds nothing
+    # and the `tlmgr info` candidate check decides (issue 59).
+    out = "package:     biblatex-vancouver\n"
+    fake = FakeRun({
+        "/vancouver.bbx": (1, ""),   # not in this mirror's file index
+        "biblatex-vancouver": (0, out),
+    })
+    monkeypatch.setattr(tinytex, "_run", fake)
+    assert tinytex._pkg_for_file(Path("/fake/bin"), "vancouver.bbx") == "biblatex-vancouver"
+    assert tinytex._pkg_for_file(Path("/fake/bin"), "vancouver.cbx") == "biblatex-vancouver"
+
+
+def test_pkg_for_file_biblatex_style_falls_back_to_extra_or_guess(monkeypatch):
+    # Pre-TL2026 tree: the extras live in one biblatex-extra package; with an
+    # empty index the guess is still biblatex-<style> so tlmgr install reports
+    # if it is bogus.
+    out = "package:     biblatex-extra\n"
+    fake = FakeRun({
+        "/chicago.bbx": (1, ""),
+        "biblatex-chicago": (0, ""),   # no entry in this index
+        "biblatex-extra": (0, out),
+    })
+    monkeypatch.setattr(tinytex, "_run", fake)
+    assert tinytex._pkg_for_file(Path("/fake/bin"), "chicago.bbx") == "biblatex-extra"
+    fake2 = FakeRun()
+    monkeypatch.setattr(tinytex, "_run", fake2)
+    assert tinytex._pkg_for_file(Path("/fake/bin"), "vancouver.bbx") == "biblatex-vancouver"
+
+
 # --- maybe_install_missing ----------------------------------------------------
 
 CASCADE_LOG = (
@@ -103,6 +134,7 @@ def _install_env(monkeypatch, present=(), pkgs=()):
         "ragged2e": ("ragged2e.sty",),
         "cyrillic": ("t2aenc.def",),
         "lh": ("larm1000.mf", "lasx1000.mf"),
+        "biblatex-vancouver": ("vancouver.bbx", "vancouver.cbx"),
     }
 
     def fake_install(b, pkg, job=None, repository=None):
@@ -149,6 +181,49 @@ def test_dedupes_repeated_missing_files(monkeypatch):
     job, names = _install_env(monkeypatch)
     installed = tinytex.maybe_install_missing(job, log)
     assert installed.count("ragged2e") == 1
+
+
+
+def test_biblatex_style_log_installs_per_style_package_once(monkeypatch):
+    # Real andrology failure (issue 59): missing vancouver.bbx/.cbx must
+    # install biblatex-vancouver - not the bogus basename package `vancouver`
+    # - and both files resolve to one package, installed once.
+    log = (
+        "Package biblatex Info: Trying to load bibliography style 'vancouver'...\n"
+        "Package biblatex Info: ... file 'vancouver.bbx' not found.\n"
+        "Package biblatex Info: ... file 'vancouver.cbx' not found.\n"
+    )
+    job, names = _install_env(monkeypatch)
+    installed = tinytex.maybe_install_missing(job, log)
+    assert installed == ["biblatex-vancouver"]
+    assert names == ["biblatex-vancouver"]
+
+
+def test_biblatex_stale_lsr_healed_by_ctan_reinstall(monkeypatch):
+    # The exact andrology situation (issue 59): biblatex-vancouver is
+    # installed on disk but kpathsea's ls-R is stale, so the file is invisible.
+    # tlmgr install succeeds ("already present") yet the file is still missing
+    # -> one CTAN retry re-extracts and refreshes ls-R.
+    job, _names = _install_env(monkeypatch, pkgs=("biblatex-vancouver",))
+    state = {"visible": False}
+    calls = []
+
+    def present(b, f):
+        return state["visible"]
+
+    def install(b, pkg, job=None, repository=None):
+        calls.append((pkg, repository))
+        if repository == tinytex.FALLBACK_REPOSITORY:
+            state["visible"] = True
+        return True
+
+    monkeypatch.setattr(tinytex, "_file_present", present)
+    monkeypatch.setattr(tinytex, "_tlmgr_install", install)
+    log = "Package biblatex Info: ... file 'vancouver.bbx' not found.\n"
+    installed = tinytex.maybe_install_missing(job, log)
+    assert installed == ["biblatex-vancouver"]
+    assert calls == [("biblatex-vancouver", None),
+                     ("biblatex-vancouver", tinytex.FALLBACK_REPOSITORY)]
 
 
 # --- compile retry cascade ----------------------------------------------------
