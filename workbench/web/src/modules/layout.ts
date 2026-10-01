@@ -14,6 +14,8 @@ export interface Tab {
   moduleId: string;
   title: string;
   params?: Record<string, unknown>;
+  /** Pinned tabs hold the front of their pane's strip (issue 54). */
+  pinned?: boolean;
 }
 
 export type GroupNode = { id: string; kind: "group"; tabs: string[]; active: string | null };
@@ -39,6 +41,8 @@ export type LayoutAction =
   | { type: "focus"; groupId: string }
   | { type: "close"; tabId: string }
   | { type: "move"; tabId: string; groupId: string; index?: number }
+  /** Pin/unpin a tab (issue 54): pinned tabs hold the front of their strip. */
+  | { type: "pin"; tabId: string; pinned: boolean }
   /** side "before" puts the new pane left/top of the group, "after" right/bottom. */
   | { type: "split"; groupId: string; dir: "h" | "v"; side?: "before" | "after"; withTabId?: string; withModuleId?: string }
   | { type: "removeGroup"; groupId: string }
@@ -345,11 +349,30 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
       const from = groupOfTab(state, action.tabId);
       let nodes = state.nodes;
       if (from && from !== action.groupId) nodes = removeTab(nodes, from, action.tabId);
-      nodes = insertTabAt(nodes, action.groupId, action.tabId, action.index);
+      // Pinned-prefix invariant (issue 54): stored order renders as-is with the
+      // pinned tabs first, so drop/menu indices stay honest. Crossing the boundary
+      // unpins — a pinned tab dropped at/after the last pinned slot loses its pin;
+      // an unpinned tab dropped before it clamps to the first unpinned slot
+      // (pinning happens only via the "pin" action).
+      const target = nodes[action.groupId] as GroupNode;
+      const others = target.tabs.filter((t) => t !== action.tabId);
+      const boundary = others.filter((t) => state.tabs[t]?.pinned === true).length;
+      let index = action.index;
+      let pinned = tab.pinned === true;
+      if (index === undefined) {
+        index = pinned ? Math.min(boundary, others.length) : others.length;
+      } else if (pinned && index >= boundary) {
+        pinned = false;
+      } else if (!pinned && index < boundary) {
+        index = boundary;
+      }
+      nodes = insertTabAt(nodes, action.groupId, action.tabId, index);
       nodes = setGroupActive(nodes, action.groupId, action.tabId);
+      const tabs = pinned === (tab.pinned === true) ? state.tabs : { ...state.tabs, [action.tabId]: { ...tab, pinned } };
       let next: LayoutState = {
         ...state,
         nodes,
+        tabs,
         focusedGroup: action.groupId,
         homes: { ...state.homes, [tab.moduleId]: action.groupId },
         lastEditor: tab.moduleId === "editor" ? action.tabId : state.lastEditor,
@@ -357,6 +380,22 @@ export function layoutReducer(state: LayoutState, action: LayoutAction): LayoutS
       // Moving a pane's last tab out empties it — collapse the split (root kept).
       if (from && from !== action.groupId) next = collapseEmptyGroup(next, from);
       return next;
+    }
+
+    case "pin": {
+      const tab = state.tabs[action.tabId];
+      if (!tab || (tab.pinned === true) === action.pinned) return state;
+      const g = groupOfTab(state, action.tabId);
+      if (!g) return state;
+      // Keep the pinned prefix contiguous: pinning appends to the end of the
+      // pinned section, unpinning drops into the first unpinned slot (issue 54).
+      const others = (state.nodes[g] as GroupNode).tabs.filter((t) => t !== action.tabId);
+      const boundary = others.filter((t) => state.tabs[t]?.pinned === true).length;
+      return {
+        ...state,
+        tabs: { ...state.tabs, [action.tabId]: { ...tab, pinned: action.pinned } },
+        nodes: insertTabAt(state.nodes, g, action.tabId, boundary),
+      };
     }
 
     case "split": {
