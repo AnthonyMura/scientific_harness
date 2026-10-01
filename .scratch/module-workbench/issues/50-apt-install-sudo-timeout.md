@@ -70,3 +70,12 @@ All in `workbench/backend/workbench_backend/install.py`:
 ## Comments
 
 New ticket (2026-09-30); user report quoted above, job log captured verbatim.
+
+Claimed 2026-10-01 (home machine). Mechanism confirmed as the sidecar user:
+
+    $ id -un; sudo -n true          # user nk (uid 1000)
+    sudo: interactive authentication is required   # exit code 1
+
+`sudo` here is **sudo-rs 0.2.13** (Ubuntu WSL image). No passwordless sudo, no TTY, no askpass — exactly the hang that ends in "sudo: timed out" from the job log above. (A first probe run via a `-lc` one-liner misreported rc=0 — pwsh→WSL re-quoting mangled `$?`; a clean stdin-pipe run is authoritative.)
+
+Decision on the open question (fix direction item 3): **keep the local apt endpoint, make it honest/safe — do not delete.** Rationale: on this machine (sidecar inside WSL, no passwordless sudo) the in-app TinyTeX target is the right path and the local card would be noise; but on other Linux hosts (lab machines running the sidecar natively as a user with passwordless sudo, or root containers) one-click apt install remains the natural path. Deleting would break those; an honest `can_install=False` plus the copy-pasteable command keeps both worlds.
