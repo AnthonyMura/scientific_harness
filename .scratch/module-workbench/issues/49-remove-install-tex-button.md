@@ -60,3 +60,22 @@ window. It is useless. We do not need it anymore."
 ## Comments
 
 New ticket (2026-09-30); user request quoted above.
+
+**Scope decision (2026-10-01, at claim): MINIMAL.** Remove only the top-bar
+button (`ProjectBar.tsx` button + its `showInstall` / `onToggleInstall` props)
+and the two prop lines in `App.tsx`. Rationale:
+
+- The user's request is specifically about the button ("useless. We do not need
+  it anymore."), not about retiring the Install module.
+- The install module stays registered (`workbench/web/src/modules/defs.ts`) so
+  saved layouts that reference `install` keep working; full scope would first
+  require verifying graceful degradation of such layouts, which was not done.
+- The module remains reachable from the UI without the top-bar button: the
+  "TeX missing — install" affordance in `ProjectSettingsMenu.tsx` opens it via
+  `ctx.onShowInstall`, and any layout can include the panel.
+
+**Updating/repairing the in-app TinyTeX afterwards:** the Install TeX panel is
+still openable from a layout (module registration unchanged); #06's on-demand
+auto-repair at compile adds missing packages automatically; a full TinyTeX
+update remains available through the panel (`POST /api/install/run` with
+`target: "tinytex"`), just no longer surfaced in the top bar.
