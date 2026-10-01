@@ -1,6 +1,6 @@
 # 58 — Compile approach choice: TinyTeX / system TeX / SSH per project
 
-Status: needs-triage
+Status: resolved (2026-10-02, home; feat/58-compile-approach-choice merged to main)
 Machine: home
 
 ## Request (user)
@@ -57,3 +57,13 @@ Split the local axis into explicit first-class approaches while keeping old valu
 ## Comments
 
 New ticket (2026-10-02, home); user request quoted above. Ticket-only creation per user instruction — no implementation started, no branch created.
+
+## Resolution (2026-10-02, home)
+
+- New `tinytex` and `system` compile targets in `workbench/backend/workbench_backend/targets.py`: `get_target` maps both names; `local` stays a backward-compat composite alias (TinyTeX first, then system TeX); the `auto` order is unchanged; unknown names still raise 400.
+- `TinyTexTarget` fails precisely when the in-app prefix is missing ("in-app TinyTeX is not installed — open the Install panel") with no silent fallback; `SystemTarget` runs PATH `latexmk` only and never prepends the in-app prefix.
+- `/api/install/status` probe split: separate `tinytex` + `system` entries (the combined `local` entry is gone); wsl/ssh unchanged.
+- Repair gate in `compile_service.py`: on-demand package install only for TinyTeX-backed engines (`tinytex`, `local`, `wsl`); `system`/`ssh` compiles never auto-install packages.
+- Web: settings-menu selector Auto / In-app TinyTeX / System TeX / SSH (remote) (+ WSL on Windows hosts), per-option tooltip from the split probe, warning chip → Install panel when the chosen approach is unavailable; `InstallPanel` labels both cards.
+- Verified headless-Chrome CDP against the real andrology project: full compiles with both engines (TinyTeX latexmk 4.88 → main.pdf 2171255 B; apt TL2025 latexmk 4.87 → main.pdf 2242907 B), no tlmgr/auto-install activity in the system job, and the target choice persisted to `.workbench/project.json`.
+- Tests: `tests/test_targets.py` rewritten (9 tests incl. name mapping + prefix isolation), new `tests/test_install.py` (probe split), new web `src/modules/targets-ui.test.ts` (14 tests); full backend + web suites green, tsc + vite build OK.
