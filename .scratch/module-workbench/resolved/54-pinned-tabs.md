@@ -1,6 +1,6 @@
 # 54 — Pinned tabs: keep a tab (e.g. the .tex section) fixed at the front of its strip
 
-Status: in-progress (claimed 2026-10-07, branch feat/54-pinned-tabs)
+Status: resolved (2026-10-01, home; feat/54-pinned-tabs merged to main)
 Machine: home
 
 ## Request (user)
