@@ -98,9 +98,11 @@ class CompileTarget:
 
 
 class LocalTarget(CompileTarget):
-    """TeX on the same OS as the backend: the in-app TinyTeX first (a hidden
-    TeX Live inside the app folder, used and modified only by this app), then
-    a system-wide installation (MiKTeX/TeX Live, MacTeX, texlive)."""
+    """Backward-compatible composite (issue 58): in-app TinyTeX first (a hidden
+    TeX Live inside the app folder, used and modified only by this app), then a
+    system-wide installation (MiKTeX/TeX Live, MacTeX, texlive). Existing project
+    configs with target "local" keep their meaning; new UIs offer tinytex /
+    system as separate first-class approaches."""
 
     name = "local"
 
@@ -147,6 +149,87 @@ class LocalTarget(CompileTarget):
             # raise inside the pump thread and leave the job "running".
             cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace", env=env
+        )
+
+
+class TinyTexTarget(CompileTarget):
+    """In-app TinyTeX only — a hidden TeX Live inside the app folder, used and
+    modified only by this app (issue 58). Never falls back to a system
+    installation: when it is missing, check()/run_latexmk say exactly that and
+    point at the Install panel."""
+
+    name = "tinytex"
+
+    def _tinytex(self) -> tuple[Path | None, dict | None]:
+        """(bin_dir, env with PATH injection) for the in-app TinyTeX."""
+        prefix = tinytex.find_prefix()
+        if not prefix:
+            return None, None
+        b = tinytex.bin_dir(prefix)
+        if not b or not (b / "latexmk").exists():
+            return None, None
+        env = dict(os.environ)
+        env["PATH"] = str(b) + os.pathsep + env.get("PATH", "")
+        return b, env
+
+    def check(self) -> TargetResult:
+        b, env = self._tinytex()
+        if b is None:
+            return TargetResult(False, "in-app TinyTeX is not installed — open the Install panel")
+        try:
+            out = subprocess.run(
+                [str(b / "latexmk"), "--version"], capture_output=True, text=True, timeout=20, env=env
+            )
+        except Exception as e:  # report any probe failure to the UI
+            return TargetResult(False, f"in-app TinyTeX failed to run: {e}")
+        first = (out.stdout or "").strip().splitlines()
+        return TargetResult(True, "in-app TinyTeX — " + (first[0] if first else ""))
+
+    def run_latexmk(
+        self, root: Path, main_file: str, build_dir: Path, force: bool = False
+    ) -> subprocess.Popen:
+        b, env = self._tinytex()
+        if b is None:
+            raise ApiError(400, "in-app TinyTeX is not installed — open the Install panel")
+        args = (["-f"] if force else []) + LATEXMK_ARGS
+        cmd = [str(b / "latexmk"), *args, f"-output-directory={build_dir}", main_file]
+        return subprocess.Popen(
+            # TeX output can carry raw 8-bit bytes; a strict decode would
+            # raise inside the pump thread and leave the job "running".
+            cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", env=env
+        )
+
+
+class SystemTarget(CompileTarget):
+    """System-wide TeX on PATH (MiKTeX / TeX Live / MacTeX) only — explicitly
+    skips the in-app TinyTeX prefix even when it is present (issue 58)."""
+
+    name = "system"
+
+    def check(self) -> TargetResult:
+        if not shutil.which("latexmk"):
+            return TargetResult(False, "no system TeX installation found on this host (PATH)")
+        try:
+            out = subprocess.run(["latexmk", "--version"], capture_output=True, text=True, timeout=20)
+        except Exception as e:  # report any probe failure to the UI
+            return TargetResult(False, f"latexmk failed to run: {e}")
+        first = (out.stdout or "").strip().splitlines()
+        return TargetResult(True, "system TeX — " + (first[0] if first else "latexmk found"))
+
+    def run_latexmk(
+        self, root: Path, main_file: str, build_dir: Path, force: bool = False
+    ) -> subprocess.Popen:
+        exe = shutil.which("latexmk")
+        if not exe:
+            raise ApiError(400, "no system TeX installation found on this host (PATH)")
+        args = (["-f"] if force else []) + LATEXMK_ARGS
+        cmd = [exe, *args, f"-output-directory={build_dir}", main_file]
+        return subprocess.Popen(
+            # TeX output can carry raw 8-bit bytes; a strict decode would
+            # raise inside the pump thread and leave the job "running".
+            cmd, cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace",
         )
 
 
@@ -367,7 +450,11 @@ class SshTarget(CompileTarget):
 
 def get_target(name: str, root: Path) -> CompileTarget:
     """Resolve a target name (or 'auto') to an implementation."""
-    if name == "local":
+    if name == "tinytex":
+        return TinyTexTarget()
+    if name == "system":
+        return SystemTarget()
+    if name == "local":  # backward-compatible composite alias (issue 58)
         return LocalTarget()
     if name == "wsl":
         d, _ = wsl_distro_from_root(root)

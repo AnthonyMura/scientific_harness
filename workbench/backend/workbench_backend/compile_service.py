@@ -110,9 +110,16 @@ class CompileService:
                 if rc == 0 or cancel_evt.is_set():
                     break
                 txt = job.text()
-                # In-app TinyTeX maintenance: install the packages named in
-                # the failure log, then retry. System TeX is never modified.
-                installed = tinytex.maybe_install_missing(job, txt)
+                # In-app TinyTeX maintenance (issue 58): on-demand package
+                # repair (#06/#57) helps only when the running engine IS the
+                # in-app TinyTeX — the tinytex target, the local composite
+                # (tinytex-first), or wsl (which prefers the same tree). The
+                # system and ssh targets never get it: a missing .sty there
+                # fails with the package name in the log for manual install.
+                if target.name in ("tinytex", "local", "wsl"):
+                    installed = tinytex.maybe_install_missing(job, txt)
+                else:
+                    installed = []
                 if not installed and "gave an error in previous invocation" in "".join(attempt_lines):
                     # This run itself refused to do anything (stale latexmk
                     # state from a killed job): clear it and force a rerun.

@@ -239,7 +239,8 @@ class FakeProc:
 
 
 class FakeTarget:
-    name = "fake"
+    # "local": a repairable engine under the issue-58 gate (tinytex/local/wsl).
+    name = "local"
 
     def __init__(self, procs):
         self.procs = list(procs)

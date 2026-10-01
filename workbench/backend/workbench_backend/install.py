@@ -141,7 +141,7 @@ def _template_extra_files(st) -> list[tuple[str, str]]:
 
 def probe_tinytex(st=None) -> TargetStatus:
     """The in-app TinyTeX: a hidden TeX Live inside the app folder."""
-    stt = TargetStatus(name="in-app TinyTeX", available=True, recommended=True)
+    stt = TargetStatus(name="tinytex", available=True, recommended=True)
     prefix = tinytex.find_prefix()
     if prefix is None:
         stt.detail = (
@@ -178,15 +178,16 @@ def probe_tinytex(st=None) -> TargetStatus:
     return stt
 
 
-def probe_local(st=None) -> TargetStatus:
-    stt = TargetStatus(name="local", available=True)
+def probe_system(st=None) -> TargetStatus:
+    """System-wide TeX on PATH only — the in-app TinyTeX is probed separately."""
+    stt = TargetStatus(name="system", available=True)
     if shutil.which("latexmk"):
         rc, out = _run(["latexmk", "--version"], timeout=20)
         stt.tex_found = True
         stt.version = out.splitlines()[0] if out else "unknown"
         stt.detail = stt.version
     else:
-        stt.detail = "no TeX installation found on this host"
+        stt.detail = "no system TeX installation found on this host (PATH)"
     if stt.tex_found and shutil.which("kpsewhich"):
         for fname, pkg in REQUIRED_FILES + _template_extra_files(st):
             rc, out = _run(["kpsewhich", fname], timeout=15)
@@ -298,7 +299,7 @@ def probe_ssh(st) -> TargetStatus:
 
 
 def status(st) -> list[dict]:
-    out = [probe_tinytex(st), probe_local(st)]
+    out = [probe_tinytex(st), probe_system(st)]
     if host_os() == "windows":
         out.append(probe_wsl(st))
     out.append(probe_ssh(st))
@@ -316,12 +317,12 @@ def start_install(st, jobs: JobRegistry, target: str, distro: str | None = None)
             raise ApiError(400, "no WSL distro available")
         cmd = ["wsl.exe", "-u", "root", "-d", d, "bash", "-lc", APT_SCRIPT]
         label = f"install TeX in WSL {d}"
-    elif target == "local":
+    elif target in ("system", "local"):  # "local" kept as an install alias
         spec = local_install_spec()
         if not spec:
             raise ApiError(501, "no supported installer found on this OS")
         cmd, _hint = spec
-        label = "install TeX (local)"
+        label = "install TeX (system)"
     else:
         raise ApiError(400, f"unknown install target: {target}")
     job = jobs.create("install", label)
