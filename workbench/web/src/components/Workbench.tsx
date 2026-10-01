@@ -10,7 +10,7 @@ import { FILE_DRAG_MIME, MODULE_DRAG_MIME, TAB_DRAG_MIME, findParent, layoutRedu
 import type { LayoutAction, LayoutState, Tab } from "../modules/layout";
 import { MODULE_DEFS, MODULE_ORDER } from "../modules/defs";
 import { MODULES } from "../modules/registry";
-import { DotsIcon, ExpandIcon, isImageName, SplitDownIcon, SplitRightIcon, XIcon } from "../icons";
+import { DotsIcon, ExpandIcon, isImageName, PinIcon, SplitDownIcon, SplitRightIcon, XIcon } from "../icons";
 
 type DragState =
   | { kind: "tab"; tabId: string; fromGroup: string }
@@ -500,7 +500,7 @@ function TabView({
   return (
     <div
       className={
-        "tab" + (active ? " active" : "") + (dropAt === "before" ? " drop-before" : "") + (dropAt === "after" ? " drop-after" : "")
+        "tab" + (active ? " active" : "") + (tab.pinned ? " pinned" : "") + (dropAt === "before" ? " drop-before" : "") + (dropAt === "after" ? " drop-after" : "")
       }
       draggable
       title={`${def.title} — click to focus, drag to move (near a pane edge it splits)`}
@@ -515,6 +515,18 @@ function TabView({
       }}
       onClick={() => dispatch({ type: "activate", groupId, tabId: tab.id })}
     >
+      {tab.pinned && (
+        <button
+          className="tab-pin"
+          title="Unpin tab"
+          onClick={(e) => {
+            e.stopPropagation();
+            dispatch({ type: "pin", tabId: tab.id, pinned: false });
+          }}
+        >
+          <PinIcon size={11} />
+        </button>
+      )}
       <span className="tab-icon">
         <Icon size={13} />
       </span>
@@ -550,6 +562,11 @@ function TabMenu({ menu, onClose }: { menu: { x: number; y: number; tabId: strin
   const group = groupId ? layout.nodes[groupId] : null;
   const tabs = group && group.kind === "group" ? group.tabs : [];
   const index = tabs.indexOf(menu.tabId);
+  const isPinned = layout.tabs[menu.tabId]?.pinned === true;
+  // Pinned prefix (issue 54): an unpinned tab can't move left of the first
+  // unpinned slot, so "left / to start" hide there. The reducer enforces it.
+  const pinnedCount = tabs.filter((t) => layout.tabs[t]?.pinned === true).length;
+  const canMoveLeft = index > 0 && (isPinned || index > pinnedCount);
   // The reducer re-inserts the tab at `index` after removing it, so ±1 steps
   // past the current slot (issue 53). Items hide themselves at the strip edges.
   const move = (to: number) => {
@@ -557,10 +574,16 @@ function TabMenu({ menu, onClose }: { menu: { x: number; y: number; tabId: strin
   };
   return (
     <div className="menu" style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 200)), top: menu.y }} onClick={onClose}>
+      <button className="menu-item" onClick={() => dispatch({ type: "pin", tabId: menu.tabId, pinned: !isPinned })}>
+        <span className="menu-item-icon">
+          <PinIcon size={13} />
+        </span>
+        {isPinned ? "Unpin tab" : "Pin tab"}
+      </button>
       <button className="menu-item" onClick={() => dispatch({ type: "close", tabId: menu.tabId })}>
         Close
       </button>
-      {groupId && index > 0 && (
+      {groupId && canMoveLeft && (
         <button className="menu-item" onClick={() => move(index - 1)}>
           Move tab left
         </button>
@@ -570,7 +593,7 @@ function TabMenu({ menu, onClose }: { menu: { x: number; y: number; tabId: strin
           Move tab right
         </button>
       )}
-      {groupId && index > 0 && (
+      {groupId && canMoveLeft && (
         <button className="menu-item" onClick={() => move(0)}>
           Move to start
         </button>

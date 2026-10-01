@@ -1086,6 +1086,21 @@ code {
   background: transparent;
 }
 .tab-x:hover, .tab-dots:hover { background: rgba(179, 143, 111, 0.2); color: var(--pearl); }
+/* pinned tabs (issue 54): pin icon + compact title, held at the front of the strip */
+.tab.pinned .tab-title { max-width: 88px; font-size: 10.5px; }
+.tab-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  color: var(--sand);
+  background: transparent;
+}
+.tab-pin:hover { background: rgba(179, 143, 111, 0.2); color: var(--pearl); }
 /* drag-drop feedback: which side of the pane a split would land on */
 .edge-line { position: absolute; z-index: 8; background: var(--gold); pointer-events: none; border-radius: 2px; }
 .edge-line.top { left: 4px; right: 4px; top: -2px; height: 3px; }
