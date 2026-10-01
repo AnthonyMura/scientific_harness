@@ -547,11 +547,39 @@ function TabView({
 function TabMenu({ menu, onClose }: { menu: { x: number; y: number; tabId: string }; onClose: () => void }) {
   const { layout, dispatch } = useWB();
   const groupId = groupOfTab(layout, menu.tabId);
+  const group = groupId ? layout.nodes[groupId] : null;
+  const tabs = group && group.kind === "group" ? group.tabs : [];
+  const index = tabs.indexOf(menu.tabId);
+  // The reducer re-inserts the tab at `index` after removing it, so ±1 steps
+  // past the current slot (issue 53). Items hide themselves at the strip edges.
+  const move = (to: number) => {
+    if (groupId) dispatch({ type: "move", tabId: menu.tabId, groupId, index: to });
+  };
   return (
     <div className="menu" style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 200)), top: menu.y }} onClick={onClose}>
       <button className="menu-item" onClick={() => dispatch({ type: "close", tabId: menu.tabId })}>
         Close
       </button>
+      {groupId && index > 0 && (
+        <button className="menu-item" onClick={() => move(index - 1)}>
+          Move tab left
+        </button>
+      )}
+      {groupId && index < tabs.length - 1 && (
+        <button className="menu-item" onClick={() => move(index + 1)}>
+          Move tab right
+        </button>
+      )}
+      {groupId && index > 0 && (
+        <button className="menu-item" onClick={() => move(0)}>
+          Move to start
+        </button>
+      )}
+      {groupId && index < tabs.length - 1 && (
+        <button className="menu-item" onClick={() => move(tabs.length - 1)}>
+          Move to end
+        </button>
+      )}
       {groupId && (
         <button
           className="menu-item"
