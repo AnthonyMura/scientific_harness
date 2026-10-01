@@ -16,14 +16,11 @@ interface Props {
   onNewProject: () => void;
   onPickRecent: (p: Project) => void;
   onRemoveRecent: (p: Project) => void;
-  showInstall: boolean;
-  onToggleInstall: () => void;
 }
 
 export default function ProjectBar({
   project, recent, devMode, ctx,
   onOpenFolder, onNewProject, onPickRecent, onRemoveRecent,
-  showInstall, onToggleInstall,
 }: Props) {
   const [settingsOpen, setSettingsOpen] = useState<{ x: number; y: number } | null>(null);
   const [recentOpen, setRecentOpen] = useState(false);
@@ -115,9 +112,6 @@ export default function ProjectBar({
       )}
       <span className="spacer" />
       {devMode && <span className="badge">browser dev mode</span>}
-      <button onClick={onToggleInstall} className={showInstall ? "active" : ""}>
-        Install TeX
-      </button>
       {settingsOpen && project && (
         <ProjectSettingsMenu x={settingsOpen.x} y={settingsOpen.y} ctx={ctx} onClose={() => setSettingsOpen(null)} />
       )}

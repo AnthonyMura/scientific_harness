@@ -716,8 +716,6 @@ export default function App() {
         onNewProject={() => setShowNew(true)}
         onPickRecent={(p) => void pickRecent(p)}
         onRemoveRecent={(p) => void removeRecent(p)}
-        showInstall={false}
-        onToggleInstall={() => dispatch({ type: "open", moduleId: "install" })}
       />
       <Workbench layout={layout} dispatch={dispatch} ctx={ctx} />
       {showNew && (
